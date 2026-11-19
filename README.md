@@ -13,14 +13,17 @@ Two versions are the main ones:
 
 | | Mode | Boot sector code | DOS .COM |
 |---|---|---|---|
-| **`bin/fullchess.img`** | two players | **510 bytes** | 488 B (`fchess.com`) |
-| **`bin/fullchess-cpu.img`** | you (White) vs the computer | **484 bytes** | 464 B (`fcvscpu.com`) |
+| **`fullchess.bin`** | two players | **510 bytes** | 488 B (`bin/fchess.com`) |
+| **`fullchess-cpu.bin`** | you (White) vs the computer | **484 bytes** | 464 B (`bin/fcvscpu.com`) |
 
 The two-player version also shows `#` / `=` at the end of the game, applies the 50-move rule and turns
 the board around for Black. It uses every one of the 510 bytes a boot sector has for code. The rule set
 is [FideLite](https://fidelite.art) L1.
 
-**Quick start:** open https://copy.sh/v86/, choose `bin/fullchess.img` as *Floppy disk image*, press
+Both files are in the top folder of this repository, and each is exactly one 512-byte sector: 510 bytes
+of code and the 2-byte `55 AA` boot signature.
+
+**Quick start:** open https://copy.sh/v86/, choose `fullchess.bin` as *Floppy disk image*, press
 *Start*, then type `e2e4` and press Enter.
 
 ---
@@ -69,12 +72,12 @@ of plays a simplified game.
 Sizes are bytes of code in the boot sector, without the zero padding and the 2-byte `55 AA` signature
 (at most 510). DOS sizes are file sizes. Every file is rebuilt by `build.sh`.
 
-### Main versions — `bin/`
+### Main versions — top folder (`.bin`) and `bin/` (`.img`, `.com`)
 
 | Boot sector | DOS | Mode | Boot | DOS | Contents |
 |---|---|---|---|---|---|
-| `fullchess.bin` / `.img` | `fchess.com` | two players | **510** | 488 | full rules + `#`/`=` + 50-move rule + board flips for Black |
-| `fullchess-cpu.bin` / `.img` | `fcvscpu.com` | vs computer | **484** | 464 | full rules, computer looks 1 ply ahead (material only) |
+| `fullchess.bin` | `bin/fchess.com` | two players | **510** | 488 | full rules + `#`/`=` + 50-move rule + board flips for Black |
+| `fullchess-cpu.bin` | `bin/fcvscpu.com` | vs computer | **484** | 464 | full rules, computer looks 1 ply ahead (material only) |
 
 ### Extras — `bin/extras/`
 
@@ -102,8 +105,9 @@ Vs computer (`src/fullchess-cpu.asm`, all with `-DSPIN`; the main version is `-D
 The fifty-move version can be built as a 75-move version with `-DPLIES=150` (same size; not prebuilt).
 
 ### File types
-- `.bin` — the 512-byte boot sector (ends in `55 AA`).
-- `.img` — the same sector as a 1.44 MB floppy image, for emulators.
+- `.bin` — the 512-byte boot sector (ends in `55 AA`). This is the program; v86 boots it directly.
+- `.img` — the same 512 bytes followed by zeros up to 1.44 MB, for tools that expect a full floppy
+  disk. Nothing after the first 512 bytes is ever read.
 - `.com` — DOS program built from the same source (BIOS/segment setup removed). DOS names stay
   within 8.3 so they run in plain DOS and DOSBox.
 
@@ -114,7 +118,9 @@ The fifty-move version can be built as a 75-move version with `-DPLIES=150` (sam
 - Type a move as *from* and *to* squares, then Enter: `e2e4⏎`.
 - Castle by moving the king: `e1g1`, `e1c1`.
 - Promote by pressing a piece key instead of Enter: **1** queen, **2** knight, **3** bishop, **4** rook
-  (Enter = queen). Example: `e7e8` then `2` promotes to a knight.
+  (Enter = queen). Example: `e7e8` then `2` promotes to a knight. `q`/`Q` also give a queen and
+  `n`/`N` a knight. Any other key still gives one of the four legal pieces: a pawn can never turn into
+  anything else.
 - The board is 8 text rows: `.` empty, `PNBRQK` White, `pnbrqk` Black, rank 8 on top. In
   `fullchess` the board turns around when Black is to move. Coordinates you type are always absolute.
 - An illegal move is silently ignored; type it again.
@@ -126,8 +132,8 @@ The fifty-move version can be built as a 75-move version with `-DPLIES=150` (sam
   counts keys; it does not know "typed" from "deleted".
 - Only the low 4 bits of each key are used, so `a` = `A` = `1` … `h` = `H` = `8`. `e2e4⏎`, `5254⏎` and
   `ebe4⏎` are the same move. Backspace (code 8) is read as `h` or `8`.
-- On screen, the first 4 keys are echoed and the 5th is not. In BIOS, Backspace moves the cursor left
-  but does not erase. After a rejected attempt the cursor stays on the same line (except in `2plightr`).
+- Every key is echoed on screen. In BIOS, Backspace moves the cursor left but does not erase, and
+  Enter returns the cursor to the start of the line. After a rejected attempt the cursor stays on the same line (except in `2plightr`).
 - **Made a typo?** Do not press Backspace. Fill the attempt up to 5 keys with Enter (it will be
   rejected), then type the move again. If you already pressed Backspace, it counts as one of the 5 keys.
 - **Lost count?** Type the move. If the board is not redrawn, press Enter once more and try again; each
@@ -139,7 +145,8 @@ The fifty-move version can be built as a 75-move version with `-DPLIES=150` (sam
 
 ## Running
 
-- **Browser, nothing to install:** https://copy.sh/v86/ → *Floppy disk image* → pick an `.img` → *Start*.
+- **Browser, nothing to install:** https://copy.sh/v86/ → *Floppy disk image* → pick `fullchess.bin`
+  (or any `.bin` / `.img`) → *Start*.
 - **QEMU:** `qemu-system-i386 -fda bin/fullchess.img`
 - **DOSBox / DOS:** run `fchess.com` or `fcvscpu.com`.
 - **Real hardware:** write the `.bin` to the first sector of a floppy or USB stick (`dd`, RaWrite).
@@ -148,7 +155,7 @@ The fifty-move version can be built as a 75-move version with `-DPLIES=150` (sam
 ## Building
 
 ```
-bash build.sh      # needs nasm; rebuilds bin/ and bin/extras/ and prints the size table
+bash build.sh      # needs nasm; rebuilds the two main .bin files, bin/ and bin/extras/, prints sizes
 nasm -f bin [-Dboot] <flags> src/fullchess.asm -o x.bin     # one version by hand (no -Dboot: .COM)
 ```
 
@@ -176,11 +183,14 @@ Every shipped version is tested as a boot sector (where it fits) and as a DOS pr
   attempts mixed in; a "quiet" mode forces 50-move draws.
 - `tools/botfuzz.py` — random White against the computer, including illegal attempts. Every computer
   move must be legal. A mate-seeking White checks the end of the game.
+- `tools/promokeys.py` — promotes a pawn once with every key code (0x00–0x7F and 0xE0) on each
+  two-player version and checks that the result is always a queen, rook, bishop or knight.
 - `tools/qboot.py` — boots an image in QEMU with SeaBIOS, types keys and takes screenshots.
 
-Last full run, 19 November 2026 (`TEST_RESULTS.txt`): **0 failures** in 43 test runs. That covers the
+Last full run, 19 November 2026 (`TEST_RESULTS.txt`): **0 failures** in 55 test runs. That covers the
 targeted cases on every two-player version, 640 random two-player games (53,010 moves and 28,426 illegal
-attempts) and 326 games against the computer (17,447 computer moves), in both boot and DOS form.
+attempts), 326 games against the computer (17,447 computer moves) and 1,548 promotions with every key
+code, in both boot and DOS form.
 Earlier, the main versions were also booted and played under QEMU with SeaBIOS.
 
 ## How it works

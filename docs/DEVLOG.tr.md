@@ -14,6 +14,18 @@
 > | `ii_light`, `ii_light_redraw` | `bin/extras/2plight`, `2plightr` |
 > | `bot_light_ply2`, `_ply2or`, `_ply3`, `_ply3or`, `_ply4`, `_ply4or` | `bin/extras/cpu2`, `cpu2or`, `cpu3`, `cpu3or`, `cpu4`, `cpu4or` |
 > | `botfuzz.py` çıktısı `bot-spin-sonu` | `bot-spun` |
+>
+> **Yayından sonra düzeltilen hata (19.11.2026).** İki kişilik sürümlerde terfi tuşu yalnız Enter ve 1–4
+> için tanımlıydı. Diğer tuşlar piyonu piyon bırakıyor, siliyor ya da geçersiz bir koda çeviriyordu
+> (ör. `Q` → kale, boşluk → piyon yok olur); bu, FIDE 3.7'ye aykırı bir hamleydi. Düzeltme: 5. tuş artık
+> `key` ile okunuyor (AL = tuş & 15, yankılı) ve `imul ax,ax,0x4b; or al,0x9f; aam 7` ile eşleniyor.
+> `or al,0x9f` her baytı 9F/BF/DF/FF'den birine çevirir, `aam 7` bunları at/kale/vezir/file → **her tuş
+> geçerli bir taş** (`q`/`Q` vezir, `n`/`N` at). Bu değişiklik +1 bayt; `FRONT=0xFF` ve doldurmada
+> `jz/mov` yerine `neg al; salc` ile −1 bayt kazanıldı → hiçbir sürümün boyutu değişmedi (ana sürüm yine
+> 510). 6 bayta kadar toplam eşleme yok (16 değer üzerinde, bayrak komutları dahil kapsamlı arama; ham tuş
+> kodunda 5 bayta kadar yok). Bot sürümleri etkilenmedi: oradaki `inc ax; and al,3; add al,2` zaten her
+> tuşu geçerli bir taşa çeviriyor. Yeni test: `tools/promokeys.py` (129 tuş kodu × her iki kişilik sürüm).
+> Ders: hedefli testler yalnız belgelenen girişleri denedi; "her olası girdi" testi ayrıca gerekir.
 
 > Deneysel bir eğlence projesi. Hedef: FideLite L1 kurallarının **hiçbirini atmadan** (yasallık,
 > rok, geçerken alma, seçmeli terfi, mat/pat) insan-insan ve insan-bilgisayar satrancını tek bir

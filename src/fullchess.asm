@@ -14,7 +14,7 @@
 ;   Sizes, boot code / .COM (build.sh): fullchess (-DFIFTY -DFLIP) 510/488 (main version),
 ;     2p 479/457, 2p50 (-DFIFTY) 499/477, 2pflip (-DFLIP) 490/468,
 ;     2plight (-DLIGHT) 457/437, 2plightr (-DLIGHT -DREDRAW) 455/435.
-;   Piece codes: P1 R2 B3 K4 N5 Q6, colour 0x20, UNMOVED 0x80, frame 0x8F.
+;   Piece codes: P1 R2 B3 K4 N5 Q6, colour 0x20, UNMOVED 0x80, frame 0xFF.
 ;   Inline comments below are in Turkish (K=kale/rook, F=fil/bishop, S=sah/king, A=at/knight,
 ;   V=vezir/queen); see docs/DEVLOG.tr.md for the full development record.
         cpu 286
@@ -32,7 +32,7 @@ BISHOP  equ 3
 KING    equ 4
 KNIGHT  equ 5
 QUEEN   equ 6
-FRONT   equ 0x8f                ; alt 3 bit 7 (ekran), 0x0F^3 > 7 (cap'te sahin ustunde)
+FRONT   equ 0xff                ; alt 3 bit 7 (ekran), 0x7F^3 > 7 (cap'te sahin ustunde); dolgu: neg al; salc
 BLACK   equ 0x20
 UNMOVED equ 0x80                ; hic oynamamis sah/kale (yalniz rokta sorulur, baska yerde silinir)
 
@@ -70,9 +70,9 @@ start:
 fill:   push di
         pop ax
         and al,0x88
-        jz .z
-        mov al,FRONT
-.z:     stosb
+        neg al                  ; CF = (al != 0)
+        salc                    ; al = CF ? FRONT (0xFF) : 0
+        stosb
         loop fill
         mov si,initial
         mov di,board
@@ -138,17 +138,11 @@ chk:    call root               ; CF=1: hamle oynandi, sira degisti
 %endif                          ; LIGHT: sayac yok; hamle kalmadiysa hicbir giris kabul edilmez
         call key2
         call key2
-%ifdef bios
-        mov ah,0
-        int 0x16
-%else
-        mov ah,8
-        int 0x21
-%endif
-        inc ax                  ; terfi tusu -> tur: Enter/1 vezir, 2 at, 3 fil, 4 kale
-        xor al,0x83             ; (kaba kuvvetle bulundu)
-        aam 9
-        push di                 ; varis karesini sakla
+        push di                 ; varis karesini sakla (key DI'yi bozar)
+        call key                ; 5. tus (yankili): AL = tus & 15, AH = 0
+        imul ax,ax,0x4b         ; terfi tusu -> tur: Enter/1 vezir, 2 at, 3 fil, 4 kale
+        or al,0x9f              ; her bayt -> 9F/BF/DF/FF ...
+        aam 7                   ; ... -> at/kale/vezir/fil: HER tus gecerli bir tas (kaba kuvvetle bulundu)
         mov di,promo
         stosb                   ; [promo]=al, di->inp
         pop ax
