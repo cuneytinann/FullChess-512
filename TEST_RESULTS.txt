@@ -1,0 +1,50 @@
+# Full test run, 2026-11-19, test.sh
+# Referee: python-chess (reads the screen). Boot sectors start with random register values (BOOTREGS=hostile).
+# Time: boot ≈5 min, DOS ≈12.5 min (including 3- and 4-ply).
+
+## boot sector (.bin)
+fullchess.bin targeted         failing: 0
+fullchess.bin random           40 games, 0 failing; moves=2864, illegal=1508, mate=2, stale=1, castle=17, ep=6, promo=11
+fullchess.bin random(quiet)    40 games, 0 failing; moves=3393, illegal=1756, mate=0, stale=0, castle=1, ep=0, promo=0, fifty=6
+fullchess-cpu.bin              30 games, 0 failing; bot moves=1712, bot captures=381, bot picked a top-2ply-material move 1467/1712, mates=0, stalemates=1, bot-spun=0
+fullchess-cpu.bin (mate-seeking) 20 games, 0 failing; bot moves=977, bot captures=223, bot picked a top-2ply-material move 862/977, mates=5, stalemates=0, bot-spun=5
+2p.bin targeted                failing: 0
+2p.bin random                  60 games, 0 failing; moves=5279, illegal=2866, mate=1, stale=2, castle=27, ep=7, promo=19
+2p50.bin targeted              failing: 0
+2p50.bin random(quiet)         40 games, 0 failing; moves=3393, illegal=1756, mate=0, stale=0, castle=1, ep=0, promo=0, fifty=6
+2pflip.bin targeted            failing: 0
+2pflip.bin random              40 games, 0 failing; moves=3351, illegal=1774, mate=2, stale=1, castle=24, ep=5, promo=19
+2plight.bin targeted           failing: 0
+2plight.bin random             60 games, 0 failing; moves=5166, illegal=2863, mate=3, stale=2, castle=22, ep=18, promo=29
+2plightr.bin targeted          failing: 0
+2plightr.bin random            40 games, 0 failing; moves=3059, illegal=1690, mate=1, stale=3, castle=23, ep=10, promo=15
+cpu2.bin                       30 games, 0 failing; bot moves=1620, bot captures=374, bot picked a top-2ply-material move 1579/1620, mates=5, stalemates=1, bot-spun=0
+cpu2.bin (mate-seeking)        20 games, 0 failing; bot moves=1277, bot captures=243, bot picked a top-2ply-material move 1255/1277, mates=3, stalemates=1, bot-spun=0
+cpu2or.bin                     30 games, 0 failing; bot moves=1462, bot captures=357, bot picked a top-2ply-material move 1387/1462, mates=2, stalemates=2, bot-spun=0
+cpu2or.bin (mate-seeking)      20 games, 0 failing; bot moves=1275, bot captures=279, bot picked a top-2ply-material move 1230/1275, mates=0, stalemates=2, bot-spun=0
+cpu3or.bin                     6 games, 0 failing; bot moves=181, bot captures=62, bot picked a top-2ply-material move 127/181, mates=6, stalemates=0, bot-spun=0
+
+## DOS (.com)
+fchess.com targeted            failing: 0
+fchess.com random              40 games, 0 failing; moves=2864, illegal=1508, mate=2, stale=1, castle=17, ep=6, promo=11
+fchess.com random(quiet)       40 games, 0 failing; moves=3393, illegal=1756, mate=0, stale=0, castle=1, ep=0, promo=0, fifty=6
+fcvscpu.com                    30 games, 0 failing; bot moves=1712, bot captures=381, bot picked a top-2ply-material move 1467/1712, mates=0, stalemates=1, bot-spun=0
+fcvscpu.com (mate-seeking)     20 games, 0 failing; bot moves=977, bot captures=223, bot picked a top-2ply-material move 862/977, mates=5, stalemates=0, bot-spun=5
+2p.com targeted                failing: 0
+2p.com random                  60 games, 0 failing; moves=5279, illegal=2866, mate=1, stale=2, castle=27, ep=7, promo=19
+2p50.com targeted              failing: 0
+2p50.com random(quiet)         40 games, 0 failing; moves=3393, illegal=1756, mate=0, stale=0, castle=1, ep=0, promo=0, fifty=6
+2pflip.com targeted            failing: 0
+2pflip.com random              40 games, 0 failing; moves=3351, illegal=1774, mate=2, stale=1, castle=24, ep=5, promo=19
+2plight.com targeted           failing: 0
+2plight.com random             60 games, 0 failing; moves=5166, illegal=2863, mate=3, stale=2, castle=22, ep=18, promo=29
+2plightr.com targeted          failing: 0
+2plightr.com random            40 games, 0 failing; moves=3059, illegal=1690, mate=1, stale=3, castle=23, ep=10, promo=15
+cpu2.com                       30 games, 0 failing; bot moves=1620, bot captures=374, bot picked a top-2ply-material move 1579/1620, mates=5, stalemates=1, bot-spun=0
+cpu2.com (mate-seeking)        20 games, 0 failing; bot moves=1277, bot captures=243, bot picked a top-2ply-material move 1255/1277, mates=3, stalemates=1, bot-spun=0
+cpu2or.com                     30 games, 0 failing; bot moves=1462, bot captures=357, bot picked a top-2ply-material move 1387/1462, mates=2, stalemates=2, bot-spun=0
+cpu2or.com (mate-seeking)      20 games, 0 failing; bot moves=1275, bot captures=279, bot picked a top-2ply-material move 1230/1275, mates=0, stalemates=2, bot-spun=0
+cpu3or.com                     6 games, 0 failing; bot moves=181, bot captures=62, bot picked a top-2ply-material move 127/181, mates=6, stalemates=0, bot-spun=0
+cpu3.com                       6 games, 0 failing; bot moves=220, bot captures=77, bot picked a top-2ply-material move 151/220, mates=4, stalemates=0, bot-spun=0
+cpu4.com                       4 games, 0 failing; bot moves=100, bot captures=44, bot picked a top-2ply-material move 63/100, mates=4, stalemates=0, bot-spun=0
+cpu4or.com                     4 games, 0 failing; bot moves=119, bot captures=45, bot picked a top-2ply-material move 91/119, mates=1, stalemates=2, bot-spun=0
