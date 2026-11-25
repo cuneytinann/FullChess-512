@@ -3,10 +3,11 @@
 # Usage: bash build.sh && bash test.sh     (requires python3, pip install unicorn chess)
 #   KIND=bin or KIND=com runs only one of the two. The 3- and 4-ply .COM tests are slow.
 # Referees: tools/targeted.py (targeted cases), tools/fuzz.py (random two-player games),
-#           tools/botfuzz.py (human vs computer), tools/promokeys.py (promotion with every key).
+#           tools/botfuzz.py (human vs computer), tools/promokeys.py (promotion with every key),
+#           tools/botpromo.py (the computer promotes to the human's last choice).
 #           targeted/fuzz/botfuzz compare against python-chess.
 R=$(cd "$(dirname "$0")" && pwd); M=$R/bin; X=$R/bin/extras; cd "$R/tools"
-C="BOARDSRC=screen PROMOMAP=qnbr"
+C="BOARDSRC=screen PROMOMAP=letters"   # terfi: n/N at, r/R kale, b/B fil, gerisi vezir
 r() { local name=$1; shift; local out; out=$(env $C "$@" 2>&1 | tail -n 1); printf '%-30s %s\n' "$name" "$out"; }
 for k in ${KIND:-bin com}; do
   B=""; H=""; [ $k = bin ] && B="--boot" && H="BOOTREGS=hostile"
@@ -18,6 +19,7 @@ for k in ${KIND:-bin com}; do
   r "$n promotion keys"      $H python3 promokeys.py $F $B
   r "$c"                     SPIN=1 LIGHT=1 ALPHA=br $H python3 botfuzz.py $P 30 217 $B
   r "$c (mate-seeking)"      MATEPREF=1 SPIN=1 LIGHT=1 ALPHA=br $H python3 botfuzz.py $P 20 219 $B
+  r "$c bot promotion"       $H python3 botpromo.py $P $B
   r "2p.$k targeted"         $H python3 targeted.py $X/2p.$k $B
   r "2p.$k random"           $H python3 fuzz.py $X/2p.$k 60 205 --bias $B
   for v in 2p 2p50 2pflip 2plight 2plightr; do r "$v.$k promotion keys" $H python3 promokeys.py $X/$v.$k $B; done
@@ -34,6 +36,7 @@ for k in ${KIND:-bin com}; do
     r "$p.$k (mate-seeking)" MATEPREF=1 SPIN=1 LIGHT=1 ALPHA=br $H python3 botfuzz.py $X/$p.$k 20 219 $B
   done
   r "cpu3or.$k"              MAXINSN=6000000000 SPIN=1 LIGHT=1 ALPHA=br $H python3 botfuzz.py $X/cpu3or.$k 6 221 $B
+  r "cpu3or.$k bot promotion" MAXINSN=6000000000 $H python3 botpromo.py $X/cpu3or.$k $B
 done
 if [ "${KIND:-com}" != bin ]; then
   r "cpu3.com"               MAXINSN=6000000000 SPIN=1 LIGHT=1 ALPHA=br python3 botfuzz.py $X/cpu3.com 6 223

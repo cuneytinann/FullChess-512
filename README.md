@@ -13,12 +13,13 @@ Two versions are the main ones:
 
 | | Mode | Boot sector code | DOS .COM |
 |---|---|---|---|
-| **`fullchess.bin`** | two players | **510 bytes** | 488 B (`bin/fchess.com`) |
-| **`fullchess-cpu.bin`** | you (White) vs the computer | **484 bytes** | 464 B (`bin/fcvscpu.com`) |
+| **`fullchess.bin`** | two players | **492 bytes** | 476 B (`bin/fchess.com`) |
+| **`fullchess-cpu.bin`** | you (White) vs the computer | **480 bytes** | 463 B (`bin/fcvscpu.com`) |
 
 The two-player version also shows `#` / `=` at the end of the game, applies the 50-move rule and turns
-the board around for Black. It uses every one of the 510 bytes a boot sector has for code. The rule set
-is [FideLite](https://fidelite.art) L1.
+the board around for Black; 18 of the 510 code bytes of the boot sector are still free. Promotion is
+chosen with a letter: `N`, `R`, `B` (either case), any other key gives a queen. The rule set is
+[FideLite](https://fidelite.art) L1.
 
 Both files are in the top folder of this repository, and each is exactly one 512-byte sector: 510 bytes
 of code and the 2-byte `55 AA` boot signature.
@@ -41,8 +42,8 @@ checkmate or stalemate (Article 5).
 
 | Program | Size | Platform | Castling | En passant | Promotion choice | Rejects illegal moves² | Ends on mate / stalemate |
 |---|---|---|---|---|---|---|---|
-| **FullChess** (two players) | **510 B** | boot sector | ✓ | ✓ | ✓ | ✓ | ✓ shows `#` / `=` |
-| **FullChess** (vs computer) | **484 B** | boot sector | ✓ | ✓ | ✓¹ | ✓ | ✓ game halts³ |
+| **FullChess** (two players) | **492 B** | boot sector | ✓ | ✓ | ✓ | ✓ | ✓ shows `#` / `=` |
+| **FullChess** (vs computer) | **480 B** | boot sector | ✓ | ✓ | ✓¹ | ✓ | ✓ game halts³ |
 | AttoChess (2026) | 278 B | DOS | ✗ | ✗ | ✗ no promotion | ✗ | ✗ |
 | LeanChess | 288 B | DOS / BIOS | ✗ | ✗ | ✗ no promotion | ✗ | ✗ |
 | Toledo Atomchess | 326–392 B | boot sector | ✗ | ✗ | ✗ no promotion | ✗ | ? |
@@ -76,8 +77,8 @@ Sizes are bytes of code in the boot sector, without the zero padding and the 2-b
 
 | Boot sector | DOS | Mode | Boot | DOS | Contents |
 |---|---|---|---|---|---|
-| `fullchess.bin` | `bin/fchess.com` | two players | **510** | 488 | full rules + `#`/`=` + 50-move rule + board flips for Black |
-| `fullchess-cpu.bin` | `bin/fcvscpu.com` | vs computer | **484** | 464 | full rules, computer looks 1 ply ahead (material only) |
+| `fullchess.bin` | `bin/fchess.com` | two players | **492** | 476 | full rules + `#`/`=` + 50-move rule + board flips for Black |
+| `fullchess-cpu.bin` | `bin/fcvscpu.com` | vs computer | **480** | 463 | full rules, computer looks 1 ply ahead (material only) |
 
 ### Extras — `bin/extras/`
 
@@ -85,22 +86,22 @@ Two players (`src/fullchess.asm`):
 
 | Name | Flags | Boot | DOS | Contents |
 |---|---|---|---|---|
-| `2p` | — | 479 | 457 | full rules + `#`/`=` |
-| `2p50` | `-DFIFTY` | 499 | 477 | + 50-move rule |
-| `2pflip` | `-DFLIP` | 490 | 468 | + board flips for Black |
-| `2plight` | `-DLIGHT` | **457** | 437 | full rules, no end indicator (at mate/stalemate no move is accepted) |
-| `2plightr` | `-DLIGHT -DREDRAW` | 455 | 435 | as `2plight`, board redrawn after every input |
+| `2p` | — | 466 | 450 | full rules + `#`/`=` |
+| `2p50` | `-DFIFTY` | 481 | 465 | + 50-move rule |
+| `2pflip` | `-DFLIP` | 477 | 461 | + board flips for Black |
+| `2plight` | `-DLIGHT` | **444** | 436 | full rules, no end indicator (at mate/stalemate no move is accepted) |
+| `2plightr` | `-DLIGHT -DREDRAW` | 444 | 436 | as `2plight`, board redrawn after every input |
 
 Vs computer (`src/fullchess-cpu.asm`, all with `-DSPIN`; the main version is `-DPLY=1`):
 
 | Name | Flags | Boot | DOS | Computer's evaluation |
 |---|---|---|---|---|
-| `cpu2or` | `-DPLY=2 -DOR2` | 488 | 468 | 2 plies, approximate (OR of threatened pieces) |
-| `cpu2` | `-DPLY=2` | 492 | 472 | 2 plies: captured − opponent's best capture |
-| `cpu3or` | `-DPLY=3 -DOR2` | 509 | 489 | 3 plies, approximate leaf |
-| `cpu3` | `-DPLY=3` | (513, does not fit) | 493 | 3 plies, DOS only |
-| `cpu4or` | `-DPLY=4 -DOR2` | does not fit | 506 | 4 plies, approximate leaf, DOS only |
-| `cpu4` | `-DPLY=4` | does not fit | 513 | 4 plies, DOS only |
+| `cpu2or` | `-DPLY=2 -DOR2` | 484 | 467 | 2 plies, approximate (OR of threatened pieces) |
+| `cpu2` | `-DPLY=2` | 488 | 471 | 2 plies: captured − opponent's best capture |
+| `cpu3or` | `-DPLY=3 -DOR2` | 510 | 496 | 3 plies, approximate leaf |
+| `cpu3` | `-DPLY=3` | (514, does not fit) | 500 | 3 plies, DOS only |
+| `cpu4or` | `-DPLY=4 -DOR2` | does not fit | 513 | 4 plies, approximate leaf, DOS only |
+| `cpu4` | `-DPLY=4` | does not fit | 517 | 4 plies, DOS only |
 
 The fifty-move version can be built as a 75-move version with `-DPLIES=150` (same size; not prebuilt).
 
@@ -117,15 +118,16 @@ The fifty-move version can be built as a 75-move version with `-DPLIES=150` (sam
 
 - Type a move as *from* and *to* squares, then Enter: `e2e4⏎`.
 - Castle by moving the king: `e1g1`, `e1c1`.
-- Promote by pressing a piece key instead of Enter: **1** queen, **2** knight, **3** bishop, **4** rook
-  (Enter = queen). Example: `e7e8` then `2` promotes to a knight. `q`/`Q` also give a queen and
-  `n`/`N` a knight. Any other key still gives one of the four legal pieces: a pawn can never turn into
-  anything else.
+- Promote by pressing a piece letter instead of Enter: **N** knight, **R** rook, **B** bishop, upper or
+  lower case. Every other key (Enter, `Q`, a digit, …) gives a queen. Example: `e7e8` then `n`
+  promotes to a knight. The boot sector reads the key's BIOS scan code, so it is the physical N, R or
+  B key that counts (with Shift or Ctrl too); the DOS versions read the letter.
 - The board is 8 text rows: `.` empty, `PNBRQK` White, `pnbrqk` Black, rank 8 on top. In
   `fullchess` the board turns around when Black is to move. Coordinates you type are always absolute.
 - An illegal move is silently ignored; type it again.
 - End of game: `#` checkmate, `=` stalemate or 50-move draw.
-- Against the computer you play White, and the computer answers at once.
+- Against the computer you play White, and the computer answers at once. When it promotes, it takes
+  the piece of your last fifth key (normally Enter, so a queen).
 
 **No line editing: Backspace does not work.**
 - Every attempt is exactly **5 keys**: four coordinate keys, then Enter (or a promotion key). The program
@@ -174,8 +176,8 @@ Every shipped version is tested as a boot sector (where it fits) and as a DOS pr
 [python-chess](https://python-chess.readthedocs.io/) as referee:
 
 - `tools/run16.py` — a 16-bit PC emulator on [Unicorn](https://www.unicorn-engine.org/), with BIOS
-  (int 10h/16h) and DOS (int 21h/29h) services. Boot sectors start with random register values to
-  catch hidden assumptions.
+  (int 10h/16h, with US-layout scan codes) and DOS (int 21h/29h) services. Boot sectors start with
+  random register values to catch hidden assumptions.
 - `tools/targeted.py` — 22 hand-made cases (27 with the 50-move rule). Castling under every condition,
   en passant, every promotion, mate, stalemate, moving into check, a captured rook replaced by another
   rook. The board is compared after every move, and every legal and illegal attempt is checked.
@@ -184,14 +186,18 @@ Every shipped version is tested as a boot sector (where it fits) and as a DOS pr
 - `tools/botfuzz.py` — random White against the computer, including illegal attempts. Every computer
   move must be legal. A mate-seeking White checks the end of the game.
 - `tools/promokeys.py` — promotes a pawn once with every key code (0x00–0x7F and 0xE0) on each
-  two-player version and checks that the result is always a queen, rook, bishop or knight.
+  two-player version and checks the rule: N/R/B keys give knight/rook/bishop, every other key a queen
+  (boot sector: by scan code; DOS: by letter, either case).
+- `tools/botpromo.py` — sets up a position where the computer's only move is a promotion and checks
+  that it promotes to the piece of the human's last fifth key.
 - `tools/qboot.py` — boots an image in QEMU with SeaBIOS, types keys and takes screenshots.
 
-Last full run, 19 November 2026 (`TEST_RESULTS.txt`): **0 failures** in 55 test runs. That covers the
+Last full run, 25 November 2026 (`TEST_RESULTS.txt`): **0 failures** in 59 test runs. That covers the
 targeted cases on every two-player version, 640 random two-player games (53,010 moves and 28,426 illegal
-attempts), 326 games against the computer (17,447 computer moves) and 1,548 promotions with every key
-code, in both boot and DOS form.
-Earlier, the main versions were also booted and played under QEMU with SeaBIOS.
+attempts), 326 games against the computer (17,447 computer moves), 1,548 promotions with every key
+code and 40 computer promotions, in both boot and DOS form.
+The main versions were also booted and played under QEMU with SeaBIOS (letter promotion, Shift held
+or not).
 
 ## How it works
 
@@ -213,6 +219,12 @@ Earlier, the main versions were also booted and played under QEMU with SeaBIOS.
 - **Computer:** the reply scan that checks legality also collects the most valuable capture the
   opponent has. Score = value captured − that (1, 2, 3 or 4 plies). Weights P1 N2 B2 R3 Q4, computed
   without a table (`aam 5; aad 2`).
+- **Promotion table in the start-up code:** the boot sector begins with `mov cx,0x3013; cld;
+  xor ax,ax` = `B9 13 30 FC 31 C0`. Bytes 1–4 are the scan codes of R and B, a filler and N; byte 5 is
+  overwritten with each key's scan code after start-up and ends the search. `CX = 0x3013` is also the
+  fill count. The match position is the piece code itself (2 rook, 3 bishop, 5 knight, 6 queen).
+- **Typed move on the stack:** the input pushes the two squares to the bottom of the stack, and the
+  legal move that matches them falls straight into the main loop; nothing is unwound.
 
 Inline comments in `src/` are in Turkish. The full development record (every size gained or lost, dead
 ends, bugs) is in Turkish in [`docs/DEVLOG.tr.md`](docs/DEVLOG.tr.md).

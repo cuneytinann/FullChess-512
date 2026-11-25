@@ -26,6 +26,43 @@
 > kodunda 5 bayta kadar yok). Bot sürümleri etkilenmedi: oradaki `inc ax; and al,3; add al,2` zaten her
 > tuşu geçerli bir taşa çeviriyor. Yeni test: `tools/promokeys.py` (129 tuş kodu × her iki kişilik sürüm).
 > Ders: hedefli testler yalnız belgelenen girişleri denedi; "her olası girdi" testi ayrıca gerekir.
+>
+> **Harfli terfi ve küçültme turu (25.11.2026).** Terfi arayüzü değişti: 5. tuş **N at, R kale, B fil**
+> (büyük/küçük fark etmez), **başka her tuş vezir**. Boot sürümleri BIOS tarama kodunu okur (fiziksel
+> tuş; Shift/Ctrl ile de, ör. Ctrl+B fil), DOS sürümleri harfi (`or al,0x20` ile). Bot, insanın son
+> 5. tuşunun taşına terfi eder (eski kural). İlk hâli (5. tuş `key` ile ham, `or 0x20`, tablo + bekçi
+> taraması) ana sürümü 524 B'a çıkardı; aşağıdaki küçültmelerle **492 B** (18 B boş). Alfabe ve 0x88
+> tahta değişmedi; kazanç algoritma ve yerleşimden:
+>
+> | Teknik | Ana sürümde | Uygulandığı yer |
+> |---|---|---|
+> | Terfi tablosu açılış kodunun baytlarında: `mov cx,0x3013; cld; xor ax,ax` = `B9 [13 30 FC 31] C0`; ptab = start+1 (LO = 1: eşleşmede DI'nin alt baytı doğrudan taş kodu), bekçi = C0 (her tuşla ezilir), CX = dolgu sayısı | −4 | tüm boot sürümleri; bot: `B9 [13 30 31] C0`, `xor al,1` (Q4 ortada olduğu için 3 girişli tablo + xor dönüşümü) |
+> | Terfi araması `try` içinde; `key` 5. tuşun kodunu bekçiye yazar (`promo` değişkeni yok) | −1 | iki kişilik; bot (bekçiyi ana döngü yazar) |
+> | Girilen hamle yığının dibinde: `xor sp,sp; call key2; push di; call key2; push di` (`inp` = 0xFFFC) | −5 | iki kişilik |
+> | `key2`'den `xchg si,di` çıktı (kareler hemen saklanıyor) | −2 | hepsi (bot: `mov [inp+2],di` / `mov [inp],di`) |
+> | Tutma çıkışı: `try`'ın başı `main`'in hemen önünde, eşleşme `main`'e düşer; `sub sp,-18; dec cx; ret` ve `jc main` yok (açılış `jmp short main` ile atlar) | −4 | iki kişilik; bot: `jmp main` + `main`'de `xor sp,sp` |
+> | Yedek döngüsü `movsw; inc cl; jnz` (pusha/popa yok; 255-256 word, CL'yi kendisi 0'lar → tutma çıkışında `dec cx` yok); kaynak işaretçisi çizim sonundaki SI = 0x8000 | −4 | iki kişilik; bot ply1–2 |
+> | Ekran: çerçeve hücresi `cmp al,0x0d` yerine `add al,[di]`'nin taşmasından (0x0E+0xFF) | −2 | hepsi |
+> | 50 hamle: `adc al,0xff; salc; inc [hm]; or [hm],al` (sıfırlama dalı yok); sayaç ledger+0 → ana döngüde `cmp byte [si],X` | −3 | FIFTY sürümleri |
+> | `try` içinde SI serbest: `mov si,tbase` → enp/hm `[si]`, `[si+8]` | −3 | hepsi |
+> | Geçerken almada `mov [bx],cl` (try'da CL = 0) | −1 | iki kişilik; bot ply1–2 |
+> | Üreteçte yön işaretçisi doğrudan BX (adımda `mov bl,dl` yok; rok BX'i push/pop ile korur) | −2 | hepsi |
+> | Şah alınınca `cmp al,8` (CF=1, ZF=0) → üreteçte `try` sonrası `jc cont` yok | −1 | hepsi |
+>
+> Boyutlar (boot / .COM): fullchess 492/476, 2p 466/450, 2p50 481/465, 2pflip 477/461, 2plight 444/436,
+> 2plightr 444/436; fullchess-cpu 480/463, cpu2 488/471, cpu2or 484/467, cpu3or **510**/496 (harfli terfiyle
+> yeniden sığdı), cpu3 (514)/500, cpu4or –/513, cpu4 –/517.
+>
+> Bu turda bulunan hatalar: (1) yerleşim değişince LIGHT sürümlerinde yön tabloları 256 baytlık sayfa
+> sınırını aştı (TP `chars`'ın sayfasıydı; ayrıca `mov bl,LO(offsets-4)` + `xlatb` sayfa başında taşar).
+> Düzeltme: TP = `offsets`'in sayfası; boot'ta `offsets-4..pawnb` tek sayfada değilse derleme hata verir,
+> DOS'ta gerekirse dolgu eklenir. (2) Test kancası: Unicorn'da çalışma sırasında eklenen kod kancaları
+> önceden çevrilmiş bloklarda tetiklenmez; teşhis kancaları `emu_start`'tan önce kurulmalı.
+> Kazandırmayanlar: alfabe (kısıtlar 4 dizilime kilitliyor; iki kişilik alfabede 3 girişli tablo dönüşümü
+> yok), ekran tablosunu açılış koduna gömmek (baytlar boş komut olarak kalıyor, kazanç 0), tabloyu 0x101'e
+> hizalamak (yerleşim tutmadı; açılış kodu çözümü daha iyi). Testler: `run16.py` int 16h'de AH = ABD düzeni
+> tarama kodu; `promokeys.py` boot için tarama kodu, DOS için harf kuralı; yeni `botpromo.py` (botun tek
+> hamlesi terfi olan konum, 10 tuş). Gerçek BIOS: QEMU + SeaBIOS'ta Shift+N, r, Shift+B, Enter doğrulandı.
 
 > Deneysel bir eğlence projesi. Hedef: FideLite L1 kurallarının **hiçbirini atmadan** (yasallık,
 > rok, geçerken alma, seçmeli terfi, mat/pat) insan-insan ve insan-bilgisayar satrancını tek bir
@@ -43,6 +80,7 @@
 Kararlaştırılanlar (19.11.2026):
 - **Ana sürümler:** insan-insan **`ii_sonuc_50_donme`** (510 B: tüm L1 kuralları + mat/pat gösterimi
   + 50 hamle + tahta dönme), insan-bot **`bot_light_ply1`** (484 B). Diğerleri "ekstra" sürüm olarak yayımlanır.
+  (25.11: harfli terfiyle 492 B ve 480 B; bkz. en üstteki not.)
 - **Sonuçlu bot sürümleri yayımlanmaz** (`bot_sonuc_ply1` 504 B, `bot_sonuc_ply2or` 508 B). Kodları
   `l1yeni.asm`'den de çıkarıldı (bkz. 2.2 ve 5).
 - Girişin 5 tuşluk yapısı ve Backspace'in çalışmadığı kullanım notuna eklendi (bölüm 1.2).
@@ -81,7 +119,9 @@ Yok: üç tekrar, yetersiz materyal, beraberlik teklifi, terk.
 
 ### 1.2 Arayüz (tüm sürümlerde aynı, "donduruldu")
 - Giriş: `dosya sıra dosya sıra` + **Enter**, ör. `e2e4⏎`. Rok şahın hamlesiyle girilir: `e1g1`, `e1c1`.
-- Terfi: Enter yerine terfi tuşu: **1 vezir, 2 at, 3 fil, 4 kale** (Enter = vezir). Ör. `e7e8` + `2` = ata terfi.
+- Terfi (25.11'den beri): Enter yerine terfi harfi: **N at, R kale, B fil** (büyük/küçük fark etmez), başka her
+  tuş vezir. Ör. `e7e8` + `n` = ata terfi. Boot: tarama kodu (fiziksel tuş), DOS: harf. (Eskiden 1 vezir,
+  2 at, 3 fil, 4 kale.)
 - Çıktı: 8 satır tahta. `.` boş, `PNBRQK` beyaz, `pnbrqk` siyah. Üst satır 8. sıra (dönen sürümde
   sıra siyahtaysa tahta 180° döner; giriş koordinatları yine mutlaktır).
 - Oyun sonu (sonuçlu sürümler): `#` mat, `=` pat (50 hamle sürümünde 50 hamle beraberliği de `=`).
@@ -116,35 +156,39 @@ Boyutlar **kod baytı**dır (boot: dolgu ve 0x55AA imzası hariç; sektörde kul
 
 ### 2.1 İnsan vs insan — kaynak `src/l1yeni.asm`
 
-| Dosya adı | Bayraklar | boot | .COM | Özellik |
-|---|---|---|---|---|
-| **`ii_sonuc_50_donme`** (ana sürüm) | `-DFIFTY -DFLIP` | **510** | 488 | Tüm L1 + `#`/`=` + 50 hamle + tahta dönme; sektör tam dolu |
-| `ii_sonuc` | — | **479** | 457 | Tüm L1 kuralları + `#`/`=` |
-| `ii_sonuc_50` | `-DFIFTY` | 499 | 477 | + 50 hamle (100 yarım hamle) otomatik beraberlik |
-| `ii_sonuc_donme` | `-DFLIP` | 490 | 468 | + sıra siyahtaysa tahta 180° döner |
-| `ii_light` | `-DLIGHT` | **457** | 437 | Tüm L1 kuralları, oyun sonu göstergesi yok (oyun donar) |
-| `ii_light_redraw` | `-DLIGHT -DREDRAW` | 455 | 435 | Aynı; her girişten sonra tahta yeniden çizilir (arayüz farkı) |
+| Dosya adı | Bayraklar | boot | .COM | 19.11 (boot/.COM) | Özellik |
+|---|---|---|---|---|---|
+| **`ii_sonuc_50_donme`** (ana sürüm) | `-DFIFTY -DFLIP` | **492** | 476 | 510/488 | Tüm L1 + `#`/`=` + 50 hamle + tahta dönme |
+| `ii_sonuc` | — | **466** | 450 | 479/457 | Tüm L1 kuralları + `#`/`=` |
+| `ii_sonuc_50` | `-DFIFTY` | 481 | 465 | 499/477 | + 50 hamle (100 yarım hamle) otomatik beraberlik |
+| `ii_sonuc_donme` | `-DFLIP` | 477 | 461 | 490/468 | + sıra siyahtaysa tahta 180° döner |
+| `ii_light` | `-DLIGHT` | **444** | 436 | 457/437 | Tüm L1 kuralları, oyun sonu göstergesi yok (oyun donar) |
+| `ii_light_redraw` | `-DLIGHT -DREDRAW` | 444 | 436 | 455/435 | Aynı; her girişten sonra tahta yeniden çizilir (arayüz farkı) |
+
+Boyutlar 25.11 itibarıyla (harfli terfi dahil); son sütun 19.11'deki (1–4 tuşlu) hâli.
 
 `-DPLIES=150`: 50 yerine FideLite L2'deki gibi otomatik **75 hamle** (aynı bayt; hazır derlenmiş sürümü yok).
-Sektörde boş kalan: ana sürüm 0 B, `ii_sonuc` 31 B, `ii_light` 53 B.
+Sektörde boş kalan (25.11): ana sürüm 18 B, `ii_sonuc` 44 B, `ii_light` 66 B.
 
 ### 2.2 İnsan (beyaz) vs bot (siyah) — kaynak `src/l1bot.asm`, yalnız materyal, hepsi "light"
 
-| Dosya adı | Bayraklar | boot | .COM | Arama |
-|---|---|---|---|---|
-| **`bot_light_ply1`** (ana sürüm) | `-DPLY=1 -DSPIN` | **484** | 464 | aldığı taşın değeri |
-| `bot_light_ply2or` | `-DPLY=2 -DOR2 -DSPIN` | 488 | 468 | aldığı − rakibin tehditlerinin OR'u (yaklaşık) |
-| `bot_light_ply2` | `-DPLY=2 -DSPIN` | 492 | 472 | aldığı − rakibin en iyi alması (gerçek max) |
-| `bot_light_ply3or` | `-DPLY=3 -DOR2 -DSPIN` | 509 | 489 | 3 yarım hamle (OR yaprak) |
-| `bot_light_ply3` | `-DPLY=3 -DSPIN` | (513, sığmaz) | 493 | 3 yarım hamle |
-| `bot_light_ply4or` | `-DPLY=4 -DOR2 -DSPIN` | sığmaz | 506 | 4 yarım hamle (OR yaprak) |
-| `bot_light_ply4` | `-DPLY=4 -DSPIN` | sığmaz | **513** | 4 yarım hamle |
+| Dosya adı | Bayraklar | boot | .COM | 19.11 (boot/.COM) | Arama |
+|---|---|---|---|---|---|
+| **`bot_light_ply1`** (ana sürüm) | `-DPLY=1 -DSPIN` | **480** | 463 | 484/464 | aldığı taşın değeri |
+| `bot_light_ply2or` | `-DPLY=2 -DOR2 -DSPIN` | 484 | 467 | 488/468 | aldığı − rakibin tehditlerinin OR'u (yaklaşık) |
+| `bot_light_ply2` | `-DPLY=2 -DSPIN` | 488 | 471 | 492/472 | aldığı − rakibin en iyi alması (gerçek max) |
+| `bot_light_ply3or` | `-DPLY=3 -DOR2 -DSPIN` | 510 | 496 | 509/489 | 3 yarım hamle (OR yaprak) |
+| `bot_light_ply3` | `-DPLY=3 -DSPIN` | (514, sığmaz) | 500 | (513)/493 | 3 yarım hamle |
+| `bot_light_ply4or` | `-DPLY=4 -DOR2 -DSPIN` | sığmaz | 513 | –/506 | 4 yarım hamle (OR yaprak) |
+| `bot_light_ply4` | `-DPLY=4 -DSPIN` | sığmaz | 517 | –/513 | 4 yarım hamle |
+
+Bot .COM'ları biraz büyüdü: DOS'ta terfi tablosu ayrı durur ve `xor` dönüşümü için 8'e göre hizalanır.
 
 Notlar:
 - "Light": oyun sonu gösterilmez. Bot hamle bulamazsa (mat/pat) program boş döngüde döner (eski `jmp $` gibi);
   insan hamle bulamazsa giriş bekler, hiçbir giriş kabul edilmez.
-- Bot terfisi: insanın son girişindeki 5. tuş (bkz. 1.2). Emülatörde, bellekte kurulan bir konumla
-  doğrulandı (ply1 ve ply2, boot ve .COM; Enter/2/3/4 → vezir/at/fil/kale; 19.11).
+- Bot terfisi: insanın son girişindeki 5. tuş (bkz. 1.2). 25.11'den beri `tools/botpromo.py` ile otomatik
+  sınanıyor (botun tek hamlesinin terfi olduğu konum; n/N/r/R/b/B/Enter/q/x/2 → at/at/kale/kale/fil/fil/vezir...).
 - ply3/ply4: insan hamlesinin yasallığı ply3'te tam derinlikte (yavaş ama doğru), ply4'te yalnız
   yasallık derinliğinde (hızlı) kontrol edilir.
 - ply ≥ 3 zayıflığı: rakibin hiç yasal cevabı yoksa (mat ya da pat) büyük kazanç sayılır → bot
@@ -203,9 +247,11 @@ Atomchess (Óscar Toledo) tarzı üreteç temel alındı, kural tarafı baştan 
 - Boş = 0. Çerçeve = FRONT (alt 3 biti 7 → ekranda satır sonu).
 - **İnsan alfabesi A2:** P1 K(kale)2 F3 Ş4 A5 V6, FRONT 0x8F. Kayan taşlar (kale, fil, vezir) bit1'de
   → "kayar mı" testi `test byte [si],2`. Alma testi `xor al,0x23` (şah → 7).
-  Terfi tuşu eşlemesi `inc ax; xor al,0x83; aam 9` (kaba kuvvetle bulundu).
+  Terfi tuşu eşlemesi `inc ax; xor al,0x83; aam 9` (kaba kuvvetle bulundu; 19.11'de `imul/or/aam`,
+  25.11'den beri harf tablosu: en üstteki nota bakın).
 - **Bot alfabesi:** P1 F2 K3 V4 A5 Ş6, FRONT 0x87 (negatif: bot bekçisi). Ağırlık `aam 5; aad 2`.
-  Alma testi `sub al,BLACK; cmp al,KING` (şah en büyük kod). Terfi `inc ax; and al,3; add al,2`.
+  Alma testi `sub al,BLACK; cmp al,KING` (şah en büyük kod). Terfi (19.11) `inc ax; and al,3; add al,2`;
+  25.11'den beri tarama kodu tablosu `[13 30 31]` + `xor al,1` (Q4 ortada, sırası 3 kale, 2 fil, 5 at, 4 vezir).
 
 ### 4.3 Hamle üretimi (`play`)
 - `si` 0x7F00'den taranır, `inc si; jns sq` 0x8000'de durur.
@@ -222,7 +268,9 @@ Atomchess (Óscar Toledo) tarzı üreteç temel alındı, kural tarafı baştan 
   cevaplarını tarar (`rply`: tarafı çevir, `cl=1` yanıt katmanı), şah alınabiliyorsa yasa dışı;
   sonra konumu yedekten geri koyar.
 - **Girilen hamle**: yasal adaylar arasında `inp` ile karşılaştırılır; eşleşen tutulur
-  (`sub sp,byte -18; dec cx; ret` ile doğrudan ana döngüye dönülür, CF=1).
+  (19.11: `sub sp,byte -18; dec cx; ret` ile ana döngüye dönülür, CF=1. 25.11'den beri iki kişilikte `inp`
+  yığının dibinde (0xFFFC, girdi `push` eder) ve `try`'ın başı `main`'in hemen önünde: eşleşme doğrudan
+  `main`'e düşer, yığın bir sonraki girdide `xor sp,sp` ile sıfırlanır; botta `jmp main`.)
 - **Mat/pat (sonuçlu):** yasal hamle sayacı (pusha çerçevesindeki BP: `inc word [si+4]`); sıfırsa
   `over`: mevcut konumda rakip şahımızı alabiliyor mu → `#`, değilse `=`
   (`salc; and al,'#'-'='; add al,'='`).
@@ -230,12 +278,14 @@ Atomchess (Óscar Toledo) tarzı üreteç temel alındı, kural tarafı baştan 
   aynı yönde kendi UNMOVED kalesine kadar boş kareler, "şu an şahta mı" yoklaması (`pusha; call rply; popa`),
   kale geçilen kareye konur ve şahın ikinci adımı (e1→g1) normal `try` ile yasallık için denenir.
 - **50 hamle:** sayaç ledger'da, piyon hamlesinde/almada sıfırlanır (`stc` + `xchg [di],al; adc al,0`),
-  mat/pat kontrolünden sonra eşik eşitliğiyle `=` (eşitlikte CF=0 → `salc` '=').
+  mat/pat kontrolünden sonra eşik eşitliğiyle `=` (eşitlikte CF=0 → `salc` '='). 25.11'den beri
+  `adc al,0xff; salc; inc [hm]; or [hm],al` (dalsız) ve sayaç ledger+0'da: ana döngüde `cmp byte [si],X`.
 - **Tahta dönme:** okuma adresine `XOR 0x77` (kare (r,c)→(7−r,7−c); çerçeve çerçevede kalır);
   maske `mov al,ch; aam 0x20; aad 0x77; xchg dx,ax`.
 
 ### 4.5 Ekran ve giriş
 - Ekran: karakter = `chars[c & 7] + c`, sonra `& 0x7f`. Çerçeve hücresi CR üretir → 7 hücre atla, LF.
+  25.11'den beri çerçeve `add`'in taşmasından tanınır (0x0E+0xFF taşar, hiçbir taş taşmaz): `cmp al,0x0d` yok.
 - Giriş (`key2/key`): tuş & 0x0F, `imul bp/bx,ax,-16; lea di,[bx+di+board+127]` ile kareye çevrilir.
   Doğrulama ya da düzenleme yok: her deneme sabit 5 tuş (bkz. 1.2). İlk 4 tuş BIOS teletype ile yankılanır.
 - Boot: `org 0x7C00`, `xor ax,ax; mov ds/es/ss,ax; mov sp,ax` (hasım başlangıç yazmaçlarına dayanıklı),
@@ -250,7 +300,7 @@ Atomchess (Óscar Toledo) tarzı üreteç temel alındı, kural tarafı baştan 
 - **Kural ve değerlendirme iç içe:** yasallık için zaten yapılan rakip cevap taraması aynı geçişte
   rakibin en değerli almasını da toplar (`cmp ax,bp; jle; mov bp,ax` ya da `or bp,ax`).
   Puan = `aldığım − bp`.
-- **Terfi:** `try` terfi taşını `[promo]`'dan alır; `promo` yalnız insan girişinde yazılır → bot da
+- **Terfi:** `try` terfi taşını tablo bekçisindeki koddan arar; bekçiyi yalnız insanın 5. tuşu yazar → bot da
   insanın son girişindeki terfi tuşunu kullanır (bkz. 1.2).
 - **ply ≥ 3:** her "yapma" seviyesinin kendi yedek tamponu var: 0x6007 + (L−1)·0x100. Tampon başında
   `[best][inp]`, geri koyma +6'dan. Yaprak dışı seviyelerde BP = tampon adresi; adres pozitif ve alt 3
@@ -297,6 +347,7 @@ Atomchess (Óscar Toledo) tarzı üreteç temel alındı, kural tarafı baştan 
 | ply3: BP = seviye tamponu + tampon başında best | −12, −20 | 550 → 538 → 518 (OR 514) |
 | ply3: `node` yedekle-ve-tara ortak girişi, parite ile seviye ayrımı, `jc/cbw` silme | dahil | |
 | ply3 `SPIN` | −5 | 509 (OR) sığdı |
+| 25.11 harfli terfi turu (13 teknik, en üstteki nota bakın) | 524 → 492 | ana iki kişilik; bot 480 |
 
 ## 7. Ölçülen maliyetler (özellik ekleri)
 
@@ -360,6 +411,14 @@ Sonuç: sıfırdan yazım aynı üretici mimarisine varıyor; kazanç yalnız ya
 
 ## 10. Hatalar ve dersler
 
+- **Yerleşim değişince sayfa sınırı (25.11).** Kod blokları yer değiştirince LIGHT sürümlerinde yön tabloları
+  256 baytlık sayfa sınırını aştı; testler yakaladı (hedefli vakaların hepsi düştü). İki ayrı neden: TP `chars`'ın
+  sayfasıydı (tablolar öbür sayfadaydı) ve `offsets` sayfa başına denk gelince `mov bl,LO(offsets-4)` + `xlatb`
+  bir sonraki sayfaya taşıyor. Ders: üreteç tabloları için derleme zamanı denetimi (`offsets-4..pawnb` tek
+  sayfa; boot'ta aşılırsa derleme hata verir, DOS'ta dolgu eklenir). Yalnız ana sürümü sınayan hızlı test
+  yetmedi: her yerleşim değişikliğinden sonra bütün bayrak birleşimleri derlenip sınanmalı.
+- **Teşhis kancası (25.11).** Unicorn'da çalışma sırasında eklenen kod kancaları önceden çevrilmiş bloklarda
+  tetiklenmez (sanki kod hiç çalışmıyormuş gibi görünür). Kancalar `emu_start`'tan önce kurulmalı.
 - **Testsiz kazanç yoktur.** Rok yeniden yazımı ilk hâliyle 22/22 hedefli testten 3'ünü düşürdü: ilk adım
   kontrolü `bx`'i kareye çevirdikten sonra `.r`'ye atlıyor, `bh=TP` (tablo sayfası) geri yüklenmiyordu;
   üreteç sonraki yönleri tahta sayfasından okudu (Rg1 reddedildi). Emülatörde kanca ile bulundu, `jne .no` ile düzeldi.
@@ -401,6 +460,9 @@ Araçlar birbirini kendi klasörlerinden bulur; herhangi bir klasörden çalış
   Çıktıdaki `bot-spin-sonu`: botun hamle bulamayıp boş döngüde döndüğü oyun sonu sayısı.
 - `qboot.py` — QEMU + SeaBIOS: tuş gönderip ekran görüntüsü alır (gerçek BIOS dumanı testi).
 - `search/` — kaba kuvvet süperoptimizer (ağırlık ve terfi eşlemeleri için).
+- `promokeys.py` (25.11'den beri): boot'ta tarama kodu (B/N/R tuşu), DOS'ta harf kuralı; `botpromo.py`: botun
+  tek hamlesinin terfi olduğu bellekte kurulmuş konum, insanın son 5. tuşuna göre taş. `run16.py` int 16h'de
+  AH'ye ABD düzeni tarama kodu yazar; `fuzz.py`'da `PROMOMAP=letters`.
 - `regresyon.sh` — tüm teslim sürümlerinin son test turu; sonucu `TEST_SONUCLARI.txt`.
 
 **Son test turu (19.11.2026, `TEST_SONUCLARI.txt`):** teslimdeki 13 sürüm boot ve .COM olarak yeniden
@@ -408,6 +470,11 @@ test edildi — 43 test satırı (hedefli vakalar + rastgele oyunlar + mat araya
 Ana insan-insan sürümünde (`ii_sonuc_50_donme`) bu turda her biçimde 2 mat, 1 pat ve 6 kez 50 hamle beraberliği
 oluştu; ana bot sürümünde (`bot_light_ply1`) botun mat olup boş döngüde döndüğü son 5 kez oluştu, hepsi doğru.
 Süre: boot turu ≈5 dk, .COM turu ≈13 dk (ply3/ply4 dahil).
+
+**Son test turu (25.11.2026, `TEST_RESULTS.txt`, harfli terfi sürümleri):** `test.sh` 59 test satırı,
+**hepsi 0 hata**: 640 rastgele iki kişilik oyun (53.010 hamle, 28.426 geçersiz deneme), bota karşı 326 oyun
+(17.447 bot hamlesi), her tuş koduyla 1.548 terfi ve 40 bot terfisi. Süre: boot ≈3 dk, .COM ≈7 dk.
+QEMU + SeaBIOS'ta 492 B ana sürümde Shift+N → at, r → kale; bot sürümü açılıp hamle verdi.
 
 Toplam (proje boyunca): insan sürümlerinde binlerce rastgele oyun (her türev için yüzlerce), bot sürümlerinde
 yüzlerce oyun; hepsi 0 hata ile kapandı. Gerçek SeaBIOS'ta (QEMU) insan, light, 50 hamle + dönme ve bot

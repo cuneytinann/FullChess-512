@@ -18,8 +18,11 @@ CODE = {chess.PAWN: 1, chess.ROOK: 2, chess.BISHOP: 3, chess.QUEEN: 4, chess.KNI
 if os.environ.get('ALPHA') == 'br':      # fil 2, kale 3 alfabesi
     CODE[chess.BISHOP], CODE[chess.ROOK] = 2, 3
 _pk = os.environ.get('PROMOMAP')         # orn. 'qnbr' = 1 vezir, 2 at, 3 fil, 4 kale
-if _pk:
-    _m = {'q': chess.QUEEN, 'r': chess.ROOK, 'b': chess.BISHOP, 'n': chess.KNIGHT}
+if _pk == 'letters':                     # harf terfisi: n/N at, r/R kale, b/B fil, gerisi vezir
+    PROMO_KEY = {chess.QUEEN: 'Q', chess.KNIGHT: 'N', chess.ROOK: 'r', chess.BISHOP: 'B'}
+    KEY_PROMO = {'Q': 'q', 'N': 'n', 'r': 'r', 'B': 'b'}
+elif _pk:
+    _m ={'q': chess.QUEEN, 'r': chess.ROOK, 'b': chess.BISHOP, 'n': chess.KNIGHT}
     PROMO_KEY = {_m[c]: str(i + 1) for i, c in enumerate(_pk)}
     KEY_PROMO = {v: {chess.QUEEN: 'q', chess.ROOK: 'r', chess.BISHOP: 'b', chess.KNIGHT: 'n'}[k] for k, v in PROMO_KEY.items()}
 

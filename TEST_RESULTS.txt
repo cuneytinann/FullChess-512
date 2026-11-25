@@ -1,6 +1,7 @@
-# Full test run, 2026-11-19, test.sh
+# Full test run, 2026-11-25, test.sh
 # Referee: python-chess (reads the screen). Boot sectors start with random register values (BOOTREGS=hostile).
-# Time: boot ≈5.5 min, DOS ≈13 min (including 3- and 4-ply).
+# Promotion keys: boot sector by scan code (B/N/R keys), DOS by letter (either case); every other key = queen.
+# Time: boot ≈3 min, DOS ≈7 min (including 3- and 4-ply).
 
 ## boot sector (.bin)
 fullchess.bin targeted         failing: 0
@@ -9,6 +10,7 @@ fullchess.bin random(quiet)    40 games, 0 failing; moves=3393, illegal=1756, ma
 fullchess.bin promotion keys   129 keys, 0 failing
 fullchess-cpu.bin              30 games, 0 failing; bot moves=1712, bot captures=381, bot picked a top-2ply-material move 1467/1712, mates=0, stalemates=1, bot-spun=0
 fullchess-cpu.bin (mate-seeking) 20 games, 0 failing; bot moves=977, bot captures=223, bot picked a top-2ply-material move 862/977, mates=5, stalemates=0, bot-spun=5
+fullchess-cpu.bin bot promotion 10 keys, 0 failing
 2p.bin targeted                failing: 0
 2p.bin random                  60 games, 0 failing; moves=5279, illegal=2866, mate=1, stale=2, castle=27, ep=7, promo=19
 2p.bin promotion keys          129 keys, 0 failing
@@ -29,6 +31,7 @@ cpu2.bin (mate-seeking)        20 games, 0 failing; bot moves=1277, bot captures
 cpu2or.bin                     30 games, 0 failing; bot moves=1462, bot captures=357, bot picked a top-2ply-material move 1387/1462, mates=2, stalemates=2, bot-spun=0
 cpu2or.bin (mate-seeking)      20 games, 0 failing; bot moves=1275, bot captures=279, bot picked a top-2ply-material move 1230/1275, mates=0, stalemates=2, bot-spun=0
 cpu3or.bin                     6 games, 0 failing; bot moves=181, bot captures=62, bot picked a top-2ply-material move 127/181, mates=6, stalemates=0, bot-spun=0
+cpu3or.bin bot promotion       10 keys, 0 failing
 
 ## DOS (.com)
 fchess.com targeted            failing: 0
@@ -37,6 +40,7 @@ fchess.com random(quiet)       40 games, 0 failing; moves=3393, illegal=1756, ma
 fchess.com promotion keys      129 keys, 0 failing
 fcvscpu.com                    30 games, 0 failing; bot moves=1712, bot captures=381, bot picked a top-2ply-material move 1467/1712, mates=0, stalemates=1, bot-spun=0
 fcvscpu.com (mate-seeking)     20 games, 0 failing; bot moves=977, bot captures=223, bot picked a top-2ply-material move 862/977, mates=5, stalemates=0, bot-spun=5
+fcvscpu.com bot promotion      10 keys, 0 failing
 2p.com targeted                failing: 0
 2p.com random                  60 games, 0 failing; moves=5279, illegal=2866, mate=1, stale=2, castle=27, ep=7, promo=19
 2p.com promotion keys          129 keys, 0 failing
@@ -57,6 +61,7 @@ cpu2.com (mate-seeking)        20 games, 0 failing; bot moves=1277, bot captures
 cpu2or.com                     30 games, 0 failing; bot moves=1462, bot captures=357, bot picked a top-2ply-material move 1387/1462, mates=2, stalemates=2, bot-spun=0
 cpu2or.com (mate-seeking)      20 games, 0 failing; bot moves=1275, bot captures=279, bot picked a top-2ply-material move 1230/1275, mates=0, stalemates=2, bot-spun=0
 cpu3or.com                     6 games, 0 failing; bot moves=181, bot captures=62, bot picked a top-2ply-material move 127/181, mates=6, stalemates=0, bot-spun=0
+cpu3or.com bot promotion       10 keys, 0 failing
 cpu3.com                       6 games, 0 failing; bot moves=220, bot captures=77, bot picked a top-2ply-material move 151/220, mates=4, stalemates=0, bot-spun=0
 cpu4.com                       4 games, 0 failing; bot moves=100, bot captures=44, bot picked a top-2ply-material move 63/100, mates=4, stalemates=0, bot-spun=0
 cpu4or.com                     4 games, 0 failing; bot moves=119, bot captures=45, bot picked a top-2ply-material move 91/119, mates=1, stalemates=2, bot-spun=0

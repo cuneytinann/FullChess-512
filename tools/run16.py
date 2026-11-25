@@ -9,6 +9,20 @@ from unicorn.x86_const import *
 
 RUNS = {}
 
+# BIOS int 16h AH=00h: AH = tarama kodu (ABD duzeni), AL = ASCII. Ctrl+harf, harfin tarama kodunu verir.
+_ROWS = {0x02: '1234567890-=', 0x10: 'qwertyuiop[]', 0x1E: "asdfghjkl;'`", 0x2B: '\\zxcvbnm,./'}
+_SHIFT = {'!': '1', '@': '2', '#': '3', '$': '4', '%': '5', '^': '6', '&': '7', '*': '8', '(': '9', ')': '0',
+          '_': '-', '+': '=', '{': '[', '}': ']', ':': ';', '"': "'", '~': '`', '|': '\\', '<': ',', '>': '.', '?': '/'}
+SCAN = {}
+for _b, _r in _ROWS.items():
+    for _i, _c in enumerate(_r): SCAN[ord(_c)] = _b + _i
+for _c in range(ord('a'), ord('z') + 1):
+    SCAN[_c - 0x20] = SCAN[_c]; SCAN[_c - 0x60] = SCAN[_c]        # buyuk harf, Ctrl+harf
+for _k, _v in _SHIFT.items(): SCAN[ord(_k)] = SCAN[ord(_v)]
+SCAN.update({0x20: 0x39, 0x0D: 0x1C, 0x08: 0x0E, 0x09: 0x0F, 0x1B: 0x01, 0x00: 0x03, 0x1C: 0x2B,
+             0x1D: 0x1B, 0x1E: 0x07, 0x1F: 0x0C, 0x7F: 0x0E, 0xE0: 0x48})
+def scan_code(ch): return SCAN.get(ch, 0)       # bilinmeyen (ör. Alt+sayi tus takimi): AH = 0
+
 def run(path, keys, boot=False, max_insn=None, on_key=None):
     import os as _os
     if max_insn is None: max_insn = int(_os.environ.get("MAXINSN", 400_000_000))
@@ -61,7 +75,7 @@ def run(path, keys, boot=False, max_insn=None, on_key=None):
             ch = next_key(uc)
             if ch is None:
                 state['done'] = True; state['reason'] = 'input exhausted'; uc.emu_stop(); return
-            uc.reg_write(UC_X86_REG_AX, ord(ch))
+            uc.reg_write(UC_X86_REG_AX, (scan_code(ord(ch)) << 8) | ord(ch))
         elif intno == 0x21 and ah in (0x01, 0x07, 0x08):
             if on_key and not lazy: on_key(uc, len(keys) - len(q))
             ch = next_key(uc)

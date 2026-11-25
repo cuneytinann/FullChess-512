@@ -5,8 +5,9 @@
 ;   program spins in an idle loop; if the human has no move, no input is accepted.
 ;   The computer only counts material: P1 N2 B2 R3 Q4 (table-free aam 5 / aad 2). Rules and
 ;   evaluation are interleaved: the opponent-reply scan done for legality also collects the
-;   opponent's most valuable capture. When promoting, the computer uses the promotion key the
-;   human typed last (Enter = queen).
+;   opponent's most valuable capture. Promotion: the human's 5th key picks the piece (N knight,
+;   R rook, B bishop in either case, any other key a queen; boot: BIOS scan code, DOS: letter);
+;   the computer promotes to the piece of the human's last 5th key (normally a queen).
 ;
 ;   nasm -f bin [-Dboot] -DPLY=n [-DOR2] [-DSPIN] fullchess-cpu.asm -o x.bin  (without -Dboot: .COM)
 ;     -DPLY=1 : value of the piece captured
@@ -16,8 +17,8 @@
 ;     -DOR2   : OR instead of max at the leaf (approximate, shorter)
 ;     -DSPIN  : single main loop (shorter; every shipped version uses it)
 ;     -Dboot / -Dbios : as in fullchess.asm
-;   Sizes, boot code / .COM (build.sh, all -DSPIN): fullchess-cpu (-DPLY=1) 484/464 (main),
-;     cpu2 492/472, cpu2or 488/468, cpu3or 509/489, cpu3 -/493, cpu4or -/506, cpu4 -/513
+;   Sizes, boot code / .COM (build.sh, all -DSPIN): fullchess-cpu (-DPLY=1) 480/463 (main),
+;     cpu2 488/471, cpu2or 484/467, cpu3or 510/496, cpu3 -/500, cpu4or -/513, cpu4 -/517
 ;     ("-" = does not fit in the boot sector).
 ;   Piece codes: P1 B2 R3 Q4 N5 K6, colour 0x20, UNMOVED 0x80, frame 0x87 (negative: sentinel).
 ;   Inline comments below are in Turkish (see docs/DEVLOG.tr.md).
@@ -60,13 +61,11 @@ best    equ save+0xfb           ; [puan]: yedek her konumda FRONT (-121) yapar (
 ; seviyelerde bp = tampon iken max/or onu bozmaz.
 save2   equ 0x6107
 best2   equ save2
-promo   equ 0x8200
 %else
 inp     equ save+0xfc           ; girilen / secilen hamle: [varis][cikis], yedekle 0x8787 olur
-promo   equ save+0x200          ; terfi: tas turu
 %endif
 %define LO(x) (((x)-start) & 255)
-%define TP   ((((chars)-start)+ORIGIN)>>8)
+%define TP   ((((offsets)-start)+ORIGIN)>>8)     ; yon tablolarinin sayfasi (chars her yerde olabilir)
 
 %macro putc 0
 %ifdef bios
@@ -76,16 +75,36 @@ promo   equ save+0x200          ; terfi: tas turu
 %endif
 %endmacro
 
+%macro PTABBLK 0
+%ifdef boot
+ptab    equ start+1             ; tablo acilis kodunda (start'a bak)
+%else
+        times (1-(($-start)&7))&7 db 0  ; hiza: LO(ptab) = 1 (mod 8) (xor donusumu icin)
+%ifdef bios
+ptab:   db 0x13,0x30,0x31       ; terfi, tarama kodlari: R kale, B fil, N at
+%else
+ptab:   db 'r','b','n'          ; terfi (DOS, ASCII): kale, fil, at
+%endif
+%endif
+initial:                        ; initial[0] = ptab+3: bekci yeri (kurulumdan sonra okunmaz)
+        db ROOK|UNMOVED,KNIGHT,BISHOP,QUEEN,KING|UNMOVED,BISHOP,KNIGHT,ROOK|UNMOVED
+%endmacro
 start:
 %ifdef boot
+        ; Terfi tablosu acilis kodunun baytlarinda (yalniz bir kez calisir):
+        ; B9 [13 30 31] C0 -> ptab = start+1: R kale, B fil, N at; bekci = C0 (acilistan
+        ; sonra insanin 5. tusuyla ezilir). LO(ptab) = 1: xor 1 -> 3 kale, 2 fil, 5 at, 4 vezir.
+        mov cx,0x3013           ; ayni zamanda dolgu sayisi: 0x7E80..0xAE92
         xor ax,ax               ; BIOS DS/ES/SS:SP icin soz vermiyor: hepsini kur
         mov ds,ax
         mov es,ax
         mov ss,ax
-        mov sp,ax               ; yigin 0000:FFFE'den asagi; dolgu 0xFD00'de biter
-%endif
+        mov sp,ax               ; yigin 0000:FFFE'den asagi
+        mov di,ledger
+%else
         mov di,ledger
         mov cx,di
+%endif
 fill:   push di
         pop ax
         and al,0x88
@@ -108,6 +127,7 @@ setup:  lodsb
 %endif
 
 main:
+        xor sp,sp               ; tutma cikisi (try) buraya yigin temizlemeden atlar
         mov si,board-8          ; tahtayi ciz (yalnizca buradan cagriliyordu: gomuldu)
 .l:
         mov al,[si]
@@ -115,13 +135,12 @@ main:
         mov bx,chars
         xlatb
         add al,[si]
-        and al,0x7f             ; UNMOVED bitini at
-        cmp al,0x0d
-        jnz .c
+        jnc .c                  ; tas/bos: tasma yok; cerceve 0x86+0x87 tasar -> AL = CR
         add si,byte 7
         putc
         mov al,0x0a
-.c:     putc
+.c:     and al,0x7f             ; UNMOVED bitini at
+        putc
         inc si
         jns .l
 %if PLY >= 3
@@ -135,17 +154,15 @@ main:
         mov bp,save             ; kok seviyesinin tamponu (yaprak disi seviyelerde bp = tampon)
         call node               ; yedek (best = FRONT) + 1. gecis
 %else
-        pusha
+        mov di,si               ; si = save (cizim 0x8000'de bitti)
         mov si,ledger
-        mov di,save
-        mov cx,128
-        rep movsw               ; konum yedegi
-        popa
+.bk:    movsw                   ; konum yedegi: 255-256 word (save'in otesi bos bellek, zararsiz)
+        inc cl                  ; cl 0 ya da 1'den (tutma cikisi) yine 0'a; ch korunur
+        jnz .bk
 %endif
 %ifdef SPIN                     ; tek dongu: 1. gecis / botun 2. gecisi / insan kontrolu ayni cagri
 %if PLY < 3
 chk:    call root               ; (bot hamle bulamazsa burada doner: oyun biter, jmp $ gibi)
-        jc main
         test ch,ch
         jnz chk                 ; bot: 2. gecis
 %else
@@ -163,7 +180,9 @@ chk:    test ch,ch              ; (1. gecis main'deki node'da)
 inpt:                           ; bot hamle bulamadiysa buraya duser: oyun donar
 %endif
         call key2
+        mov [inp+2],di          ; cikis
         call key2
+        mov [inp],di            ; varis
 %ifdef bios
         mov ah,0
         int 0x16
@@ -171,19 +190,15 @@ inpt:                           ; bot hamle bulamadiysa buraya duser: oyun donar
         mov ah,8
         int 0x21
 %endif
-        inc ax                  ; terfi tusu -> tur: Enter/1 vezir, 2 at, 3 fil, 4 kale
-        and al,3
-        add al,2
-        mov [promo],al
-        xchg ax,di
-        mov di,inp
-        stosw                   ; varis
-        xchg ax,si
-        stosw                   ; cikis
+%ifdef bios
+        mov [ptab+3],ah         ; terfi: tarama kodu bekci yerine (R/B/N, gerisi vezir)
+%else
+        or al,0x20              ; DOS: kucuk harf
+        mov [ptab+3],al
+%endif
 %ifdef SPIN
 %if PLY >= 3
-.b:     call root
-        jc main
+.b:     call root           ; donerse oynanmadi (oynanirsa try main'e atlar)
 %endif
         jmp chk
 %else
@@ -192,10 +207,12 @@ inpt:                           ; bot hamle bulamadiysa buraya duser: oyun donar
         jmp inpt                ; gecersiz giris: best zaten max, 1. gecis gerekmez
 %endif
 
-initial:
-        db ROOK|UNMOVED,KNIGHT,BISHOP,QUEEN,KING|UNMOVED,BISHOP,KNIGHT,ROOK|UNMOVED
+        PTABBLK                 ; boot: yalniz initial (tablo acilis kodunda); DOS: hizali tablo + initial
 chars:
         db '.'-0,'P'-1,'B'-2,'R'-3,'Q'-4,'N'-5,'K'-6,(0x0d-FRONT)&255
+%ifndef boot
+        times ((((($-$$)&255)+31)>>8)|(((($-$$)&255)+252)>>8^1))*((260-(($-$$)&255))&255) db 0 ; DOS: offsets-4..pawnb tek sayfada
+%endif
 offsets:
         db LO(pawnw),LO(pawnb),LO(bishd),LO(rookd),LO(rookd),LO(disp),LO(rookd)
 disp:   db -33,-31,-18,-14,14,18,31,33
@@ -204,6 +221,7 @@ bishd:  db 15,17,-15,-17
 pawnd:
 pawnw:  db -15,-17,-16,-32
 pawnb:  db 15,17,16,32
+        times -((((offsets-4)-start)^((pawnb+3)-start))>>8) db 0 ; offsets-4..pawnb ayni sayfada olmali (xlatb, adim)
 
 rply:   xor ch,BLACK            ; rakip, bir alt katman
         xor bp,bp               ; yaprakta: rakibin en degerli almasi
@@ -244,19 +262,18 @@ sq:     mov al,[si]
         jnc nsq
         cmp byte [si],PAWN+1
         sbb al,0xfb
-        mov ah,0x0c
-        and ah,al
+        mov dh,0x0c
+        and dh,al               ; dh = yon sayisi (4 / 8)
         mov bl,LO(offsets-4)
         xlatb
-        xchg dx,ax
+        mov bl,al               ; bx = yon tablosu isaretcisi
 dir:    mov di,si
-step:   mov bl,dl
-        xchg ax,di
+step:   xchg ax,di
         add al,[bx]
         xchg ax,di
         mov al,[di]
         inc ax
-        cmp dl,LO(pawnd)
+        cmp bl,LO(pawnd)
         dec al
         jz empty
         jc cap
@@ -268,7 +285,7 @@ cap:    xor al,ch
         cmp al,KING
         ja next
         jne move
-        stc                     ; sah aliniyor
+        cmp al,KING+1           ; sah aliniyor: CF=1, ZF=0 (try donusunde je step tutmasin)
         ret
 empty:  jc move
         cmp dh,2
@@ -302,8 +319,7 @@ move:
         jnz cont                ; yaprak: yalnizca sah alma + en iyi alma
 %endif
         call try
-        jc cont                 ; gecersiz
-        je step                 ; rok kuruldu: sahin ikinci adimi
+        je step                 ; rok kuruldu: sahin ikinci adimi (gecersizde ZF=0)
 cont:   mov al,[si]
         cmp byte [di],0
         jnz next
@@ -311,7 +327,7 @@ cont:   mov al,[si]
         sub al,2
         cmp al,KNIGHT-2         ; kayan: fil 2, kale 3, vezir 4
         jc step
-next:   inc dx
+next:   inc bx
         dec dh
         jnz dir
 nsq:    inc si
@@ -323,24 +339,36 @@ nsq:    inc si
 try:    pusha
         mov al,0
         xchg al,[si]
+        mov si,enp              ; si artik serbest: enp = [si]
         and al,0x7f             ; tas artik oynamis: UNMOVED silinir
         test al,6               ; piyon mu?
         jnz .np                 ; degilse BX tablo isaretcisi: gecerken alma yok
         mov bx,di
         xor bl,0x10
-        cmp di,[enp]
+        cmp di,[si]
         jne .ne
+%if PLY < 3
+        mov [bx],cl             ; gecerken alinan piyon (try'da cl = 0)
+%else
         mov byte [bx],0         ; gecerken alinan piyon
+%endif
 .ne:    dec dh                  ; dh==1 (cift adim)? dh sonra lea dx ile eziliyor: serbest
         jz .pp                  ; cift adim: BX atlanan kare
         lea dx,[di+0x10]
         test dl,0x60
         jnz .nq
-        mov al,[promo]          ; terfi tasi
+        push di
+        mov di,ptab
+        mov al,[di+3]           ; bekci = insanin son 5. tusu: bulunamazsa sonda kendisi
+.p:     scasb
+        jne .p
+        xchg ax,di              ; AL = ptab+i+1 (alt bayt)
+        xor al,LO(ptab)         ; -> 3 kale, 2 fil, 5 at, 4 vezir (bekci); LO(ptab) = 1 mod 8
+        pop di
         or al,ch
 .nq:    mov bh,0                ; BX artik kare degil
 .pp:
-.np:    mov [enp],bx
+.np:    mov [si],bx
         mov [di],al
         call rply               ; CF=1: gecersiz
         jc .u
@@ -361,9 +389,12 @@ try:    pusha
         jne .m
         cmpsw
         jne .m
-        sub sp,byte -18         ; pusha(16)+donus(2) at; kayitlari geri koyma (main sifirlar)
-        dec cx                  ; cl: 1->0 (rply inc etmisti); ch zaten rakip; SP<0xFFEE: CF=1
-        ret
+%if PLY < 3
+        jmp main                ; ch zaten rakip; cl = 1 kalir: main'deki yedek dongusu sifirlar
+%else
+        dec cx                  ; cl: kok seviyesine geri (rply inc etmisti); ch zaten rakip
+        jmp main                ; yigin main'de sifirlanir
+%endif
 .rec:   stosb                   ; yeni en iyi: puan, varis, cikis -> inp
         movsw
         movsw
@@ -389,6 +420,7 @@ try:    pusha
         cmp al,[si]             ; hic oynamamis kendi sahim mi? (AL = SAH|U|renk kalir)
         jne .r
         mov ah,[bx]             ; AH = bu yonun adimi
+        push bx                 ; uretecin yon isaretcisi: .no geri yukler
         mov bx,si
         add bl,ah
         cmp bx,di               ; ilk adim mi?
@@ -405,11 +437,10 @@ try:    pusha
         jc .no
         sub [bx],al             ; kaleyi kaldir; ZF=1 CF=0: ikinci adimi uret
         mov [di],al             ; kale gecilen kareye (rokta sah zaten oynamis olur)
-.no:    mov bh,TP               ; BX yine tablo sayfasi
+.no:    pop bx
 .r:     ret
 
-key2:   xchg si,di
-        call key
+key2:   call key
         xchg di,ax
 key:
 %ifdef bios
@@ -433,3 +464,4 @@ display:
         times 510-($-$$) db 0   ; 510'u asarsa nasm burada hata verir
         dw 0xaa55               ; acilis imzasi
 %endif
+
