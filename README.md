@@ -13,11 +13,11 @@ Two versions are the main ones:
 
 | | Mode | Boot sector code | DOS .COM |
 |---|---|---|---|
-| **`fullchess.bin`** | two players | **492 bytes** | 476 B (`bin/fchess.com`) |
+| **`fullchess.bin`** | two players | **493 bytes** | 476 B (`bin/fchess.com`) |
 | **`fullchess-cpu.bin`** | you (White) vs the computer | **480 bytes** | 463 B (`bin/fcvscpu.com`) |
 
 The two-player version also shows `#` / `=` at the end of the game, applies the 50-move rule and turns
-the board around for Black; 18 of the 510 code bytes of the boot sector are still free. Promotion is
+the board around for Black; 17 of the 510 code bytes of the boot sector are still free. Promotion is
 chosen with a letter: `N`, `R`, `B` (either case), any other key gives a queen. The rule set is
 [FideLite](https://fidelite.art) L1.
 
@@ -42,9 +42,9 @@ checkmate or stalemate (Article 5).
 
 | Program | Size | Platform | Castling | En passant | Promotion choice | Rejects illegal moves² | Ends on mate / stalemate |
 |---|---|---|---|---|---|---|---|
-| **FullChess** (two players) | **492 B** | boot sector | ✓ | ✓ | ✓ | ✓ | ✓ shows `#` / `=` |
+| **FullChess** (two players) | **493 B** | boot sector | ✓ | ✓ | ✓ | ✓ | ✓ shows `#` / `=` |
 | **FullChess** (vs computer) | **480 B** | boot sector | ✓ | ✓ | ✓¹ | ✓ | ✓ game halts³ |
-| AttoChess (2026) | 278 B | DOS | ✗ | ✗ | ✗ no promotion | ✗ | ✗ |
+| AttoChess (2026) | 272 B | DOS | ✗ | ✗ | ✗ no promotion | ✗ | ✗ |
 | LeanChess | 288 B | DOS / BIOS | ✗ | ✗ | ✗ no promotion | ✗ | ✗ |
 | Toledo Atomchess | 326–392 B | boot sector | ✗ | ✗ | ✗ no promotion | ✗ | ? |
 | Super Micro Chess "mini" | 455 B | DOS | ✗ | ✗ | ✗ queen only | ? | ? |
@@ -77,7 +77,7 @@ Sizes are bytes of code in the boot sector, without the zero padding and the 2-b
 
 | Boot sector | DOS | Mode | Boot | DOS | Contents |
 |---|---|---|---|---|---|
-| `fullchess.bin` | `bin/fchess.com` | two players | **492** | 476 | full rules + `#`/`=` + 50-move rule + board flips for Black |
+| `fullchess.bin` | `bin/fchess.com` | two players | **493** | 476 | full rules + `#`/`=` + 50-move rule + board flips for Black |
 | `fullchess-cpu.bin` | `bin/fcvscpu.com` | vs computer | **480** | 463 | full rules, computer looks 1 ply ahead (material only) |
 
 ### Extras — `bin/extras/`
@@ -86,11 +86,11 @@ Two players (`src/fullchess.asm`):
 
 | Name | Flags | Boot | DOS | Contents |
 |---|---|---|---|---|
-| `2p` | — | 466 | 450 | full rules + `#`/`=` |
-| `2p50` | `-DFIFTY` | 481 | 465 | + 50-move rule |
-| `2pflip` | `-DFLIP` | 477 | 461 | + board flips for Black |
-| `2plight` | `-DLIGHT` | **444** | 436 | full rules, no end indicator (at mate/stalemate no move is accepted) |
-| `2plightr` | `-DLIGHT -DREDRAW` | 444 | 436 | as `2plight`, board redrawn after every input |
+| `2p` | — | 467 | 450 | full rules + `#`/`=` |
+| `2p50` | `-DFIFTY` | 482 | 465 | + 50-move rule |
+| `2pflip` | `-DFLIP` | 478 | 461 | + board flips for Black |
+| `2plight` | `-DLIGHT` | **445** | 431 | full rules, no end indicator (at mate/stalemate no move is accepted) |
+| `2plightr` | `-DLIGHT -DREDRAW` | 445 | 431 | as `2plight`, board redrawn after every input |
 
 Vs computer (`src/fullchess-cpu.asm`, all with `-DSPIN`; the main version is `-DPLY=1`):
 
@@ -132,8 +132,11 @@ The fifty-move version can be built as a 75-move version with `-DPLIES=150` (sam
 **No line editing: Backspace does not work.**
 - Every attempt is exactly **5 keys**: four coordinate keys, then Enter (or a promotion key). The program
   counts keys; it does not know "typed" from "deleted".
-- Only the low 4 bits of each key are used, so `a` = `A` = `1` … `h` = `H` = `8`. `e2e4⏎`, `5254⏎` and
-  `ebe4⏎` are the same move. Backspace (code 8) is read as `h` or `8`.
+- Keys are not checked; a wrong key gives some other square, and that attempt is normally rejected.
+  Two-player versions: the file is the letter `a`–`h` (either case); the rank is the digit key `1`–`8`
+  of the main keyboard. The boot sector reads the rank from the key's scan code, so numeric-keypad
+  digits do not work there, while on AZERTY-style keyboards the top-row keys work without Shift.
+  The vs-computer version still uses only the low 4 bits of each key (`a` = `A` = `1` … `h` = `8`).
 - Every key is echoed on screen. In BIOS, Backspace moves the cursor left but does not erase, and
   Enter returns the cursor to the start of the line. After a rejected attempt the cursor stays on the same line (except in `2plightr`).
 - **Made a typo?** Do not press Backspace. Fill the attempt up to 5 keys with Enter (it will be
@@ -192,18 +195,32 @@ Every shipped version is tested as a boot sector (where it fits) and as a DOS pr
   that it promotes to the piece of the human's last fifth key.
 - `tools/qboot.py` — boots an image in QEMU with SeaBIOS, types keys and takes screenshots.
 
-Last full run, 25 November 2026 (`TEST_RESULTS.txt`): **0 failures** in 59 test runs. That covers the
-targeted cases on every two-player version, 640 random two-player games (53,010 moves and 28,426 illegal
-attempts), 326 games against the computer (17,447 computer moves), 1,548 promotions with every key
-code and 40 computer promotions, in both boot and DOS form.
-The main versions were also booted and played under QEMU with SeaBIOS (letter promotion, Shift held
-or not).
+Last full run, 25 November 2026, after the two-player rewrite (`TEST_RESULTS.txt`): **0 failures** in
+59 test runs. That covers the targeted cases on every two-player version, 640 random two-player games
+(53,010 moves and 28,426 illegal attempts), 326 games against the computer (17,447 computer moves),
+1,548 promotions with every key code and 40 computer promotions, in both boot and DOS form.
+The main versions were also booted and played under QEMU with SeaBIOS (letter promotion with and
+without Shift; castling and en passant in the rewritten two-player version).
 
 ## How it works
 
-- **Board:** a 16-wide board in one 256-byte page. Columns 8–15 and rows 8–15 are a frame, so a step
-  off the board lands on a frame square without any bounds check. The move generator is in the style
-  of Óscar Toledo's Atomchess; the rule logic around it is our own.
+- **Board:** a 16-wide board in one 256-byte page at `0x7F00`. Columns 8–15 and rows 8–15 are a frame,
+  so a step off the board lands on a frame square without any bounds check; loops over the board stop
+  when the address reaches `0x8000` (the sign bit). This page layout comes from Óscar Toledo's Atomchess.
+- **Piece selection (two-player versions):** one descriptor byte per piece type,
+  `28 × number of directions + offset of its direction list`; `aam 28` splits it into the direction
+  count (AH) and the list offset (AL) in one instruction. Black pawns carry an extra mark bit (`0x08`),
+  so they get their own descriptor and their own direction list; display, pawn and slider tests only
+  look at the low three bits and do not notice it.
+- **Stepping:** the target square is kept in DX, with DH = board page and DL = square, so a step is
+  `add dl,[bx]` / `mov di,dx` and wraps inside the page.
+- **Pawn moves** are classified by the direction byte itself: odd = diagonal, ±32 = double step,
+  anything else = single step.
+- **Squares from keys:** `aad 0xF0` computes file − 16 × rank in one instruction (the boot sector takes
+  the rank from the digit key's scan code: `1` = `02` … `8` = `09`).
+- **Display:** `aam 0x20` splits a square byte into colour and piece type, the type picks a plain
+  letter (`.PRBKNQ`), and `aad 0x20` adds the colour back as the lower-case bit. A frame square comes
+  out with the sign bit set and starts a new row.
 - **Legality by trying:** each candidate move is played on a copy of the position, then all replies
   are scanned. If a reply can capture the king, the move is illegal. The same scan answers "is the king
   in check now?".
@@ -216,6 +233,8 @@ or not).
 - **Mate/stalemate:** legal moves are counted while matching your input. If there are none, the
   program checks whether the opponent can capture the king right now (`#`) or not (`=`).
 - **Board flip:** square addresses are XOR-ed with `0x77` when Black is to move.
+- **Vs-computer version:** still uses the earlier, Atomchess-style move generator, input and display
+  code (see [Credits](#credits)); moving it to the new code is the next step.
 - **Computer:** the reply scan that checks legality also collects the most valuable capture the
   opponent has. Score = value captured − that (1, 2, 3 or 4 plies). Weights P1 N2 B2 R3 Q4, computed
   without a table (`aam 5; aad 2`).
@@ -228,6 +247,24 @@ or not).
 
 Inline comments in `src/` are in Turkish. The full development record (every size gained or lost, dead
 ends, bugs) is in Turkish in [`docs/DEVLOG.tr.md`](docs/DEVLOG.tr.md).
+
+## Shorter tricks we leave out
+
+We checked the other x86 chess programs under 1 KB for tricks that would make FullChess shorter. We do
+not use them, so that the code stays our own; this is what they would save.
+
+| Program | Trick | Effect on FullChess |
+|---|---|---|
+| Toledo Atomchess (326–392 B) | Pawn moves told apart by their place in the direction list (`inc`/`cmp`/`dec` flag trick) | **2 bytes shorter** (measured: 491 instead of 493) |
+| Toledo Atomchess | Letter table holding "letter − piece code", added to the raw square byte | about 1 byte shorter with the old piece codes; does not fit the black-pawn mark without extra code |
+| Toledo Atomchess | Piece selection (`cmp`/`sbb` for the pawn colour, direction count from the index with `and 0x0c`); square input (`imul`/`lea`) | not shorter: piece selection 3 bytes longer; square input the same size (boot) or 1 byte longer (DOS) |
+| LeanChess (288 B), AttoChess (272 B) | Letters computed with an `add` instead of a table, if the bishop is shown as `O` | would replace the 7-byte letter table with a few instructions, at the cost of a non-standard letter; not measured |
+| LeanChess, AttoChess | Only half of the directions stored; the code negates them for the other half | would shrink the 16 bytes of piece directions (pawns are not symmetric); not measured |
+| ChessLin (2016) | Back rank packed into one 32-bit constant (`rol eax`), FPU stores to clear memory | needs a 386 and an FPU; FullChess targets a 286 |
+| BootChess (487 B), Toledo Atomchess Reloaded (779 B) | Different designs (BootChess: text board, bit-mask pieces; Reloaded: legality through a search) | nothing we found would make FullChess shorter |
+| Super Micro Chess (455 / 583 B) | Only the executables and a C version are published | no assembly source to compare |
+
+Measured differences were built and tested on the two-player main version (`fullchess.bin`).
 
 ## Limitations
 
@@ -245,7 +282,15 @@ ends, bugs) is in Turkish in [`docs/DEVLOG.tr.md`](docs/DEVLOG.tr.md).
 
 ## Credits
 
-- Move generator style: Óscar Toledo G., [Atomchess](https://nanochess.org/chess6.html).
+- **Óscar Toledo G., [Toledo Atomchess](https://nanochess.org/chess6.html)** (© 2015–2019). FullChess
+  started from Atomchess's design. The two-player versions are now written in our own code, but these
+  ideas still come from Atomchess: the board page at `0x7F00` with loops that end on the sign bit at
+  `0x8000`, the frame squares that start a new row in the board printout, the shape of the set-up loop
+  and the order of the pawn directions. The vs-computer version (`src/fullchess-cpu.asm`) still
+  contains Atomchess-derived code: piece selection, stepping, pawn handling, the sliding-piece check,
+  square input and the letter table. The MIT license covers our own code; those parts remain Óscar Toledo's work.
+- **ChessLin** (Olivier Poudade, 2016) already turned typed coordinates into a 0x88 square with `aad`;
+  our `aad 0xF0` was found independently.
 - Rule set: [FideLite](https://github.com/cuneytinann/FideLite) L1.
 - Testing: [python-chess](https://python-chess.readthedocs.io/), [Unicorn](https://www.unicorn-engine.org/);
   in-browser running: [v86](https://copy.sh/v86/).
@@ -254,6 +299,7 @@ Comparison sources: [BootChess](https://www.chessprogramming.org/BootChess) ·
 [Atomchess](https://nanochess.org/chess6.html) · [toledo-atomchess](https://github.com/nanochess/toledo-atomchess) ·
 [Super Micro Chess](https://smmax.sourceforge.net/) · [LeanChess](https://leanchess.github.io/) ·
 [AttoChess](https://nicholas-afk.github.io/AttoChess/) ·
+[ChessLin and BootChess source](https://github.com/Alex-PaulinePoudade/Chess) ·
 [1K ZX Chess](https://en.wikipedia.org/wiki/1K_ZX_Chess) ·
 [ChesSkelet](https://hackaday.com/2019/03/28/writing-a-very-tiny-chess-program) ·
 [Guinness record](https://www.guinnessworldrecords.com/world-records/598436-smallest-chess-computer-programme) ·

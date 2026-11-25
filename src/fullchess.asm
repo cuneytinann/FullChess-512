@@ -1,7 +1,8 @@
 ; fullchess.asm -- FullChess, two players, x86 16-bit (boot sector or DOS .COM).
 ;   Rules: all piece moves, legality (no move may leave or put your own king in check),
 ;   castling with all its conditions, en passant, promotion to queen/knight/bishop/rook,
-;   checkmate and stalemate. Atomchess-style move generator; rule logic is our own (README).
+;   checkmate and stalemate. Own code; credits and the parts that still follow Toledo
+;   Atomchess (board page, setup loop shape, frame newline) are listed in the README.
 ;   Promotion: the 5th key of a move picks the piece: N knight, R rook, B bishop (either case),
 ;   any other key a queen. Boot sector: by BIOS scan code (the physical key); DOS: by letter.
 ;
@@ -13,10 +14,14 @@
 ;     -DREDRAW : (only with -DLIGHT) board is redrawn after every input
 ;     -DFIFTY  : (without LIGHT) automatic draw after 50 moves = 100 plies; -DPLIES=150: 75 moves
 ;     -DFLIP   : board rotates 180 degrees when Black is to move (input stays absolute)
-;   Sizes, boot code / .COM (build.sh): fullchess (-DFIFTY -DFLIP) 492/476 (main version),
-;     2p 466/450, 2p50 (-DFIFTY) 481/465, 2pflip (-DFLIP) 477/461,
-;     2plight (-DLIGHT) 444/436, 2plightr (-DLIGHT -DREDRAW) 444/436.
-;   Piece codes: P1 R2 B3 K4 N5 Q6, colour 0x20, UNMOVED 0x80, frame 0xFF.
+;   Sizes, boot code / .COM (build.sh): fullchess (-DFIFTY -DFLIP) 493/476 (main version),
+;     2p 467/450, 2p50 (-DFIFTY) 482/465, 2pflip (-DFLIP) 478/461,
+;     2plight (-DLIGHT) 445/431, 2plightr (-DLIGHT -DREDRAW) 445/431.
+;   Piece codes: P1 R2 B3 K4 N5 Q6, colour 0x20, UNMOVED 0x80, black pawn mark 0x08, frame 0xFF.
+;   Techniques: square from keys with aad 0xF0; display splits colour/type with aam 0x20 and
+;   puts the colour back as the lower-case bit with aad 0x20; one descriptor byte per piece
+;   (28*directions + list offset) split by aam 28; target square stepped in DL (DH = board page);
+;   pawn moves classified by the direction byte (odd = diagonal, +-32 = double step).
 ;   Inline comments below are in Turkish (K=kale/rook, F=fil/bishop, S=sah/king, A=at/knight,
 ;   V=vezir/queen); see docs/DEVLOG.tr.md for the full development record.
         cpu 286
@@ -36,6 +41,7 @@ KNIGHT  equ 5
 QUEEN   equ 6
 FRONT   equ 0xff                ; alt 3 bit 7 (ekran), 0x7F^3 > 7 (cap'te sahin ustunde); dolgu: neg al; salc
 BLACK   equ 0x20
+BPAWN   equ 0x08                ; siyah piyon isareti (alt 3 bit yine PAWN: ekran, piyon ve kayma testleri ayni)
 UNMOVED equ 0x80                ; hic oynamamis sah/kale (yalniz rokta sorulur, baska yerde silinir)
 
 board   equ 0x7f00
@@ -53,7 +59,7 @@ PLIES   equ 100                 ; 50 hamle = 100 yarim hamle (FideLite L2'nin ot
 save    equ 0x8000              ; konum yedegi: yedek dongusu 510/512 bayt yazar, geri koyma 250 bayt
 inp     equ 0xfffc              ; girilen hamle yiginin dibinde: [varis][cikis] (girişte push edilir)
 %define LO(x) (((x)-start) & 255)
-%define TP   ((((offsets)-start)+ORIGIN)>>8)     ; yon tablolarinin sayfasi (chars her yerde olabilir)
+%define TP   ((((desc)-start)+ORIGIN)>>8)        ; tas tanimlari ve yon tablolarinin sayfasi
 
 %macro putc 0
 %ifdef bios
@@ -79,7 +85,7 @@ start:
         mov di,ledger
 %else
         mov di,ledger
-        mov cx,di
+        mov ch,2                ; CX >= 0x200: defter + tahta sayfasi (0x180 bayt) yeter
 %endif
 fill:   push di
         pop ax
@@ -95,7 +101,7 @@ setup:  lodsb
         mov [di+0x70],al
         or al,BLACK
         stosb
-        mov byte [di+0x0f],PAWN+BLACK
+        mov byte [di+0x0f],PAWN+BLACK+BPAWN
         inc byte [di+0x5f]
         loop setup
         jmp short main          ; try'in basi araya girdi (tutma cikisi main'e dusecek)
@@ -115,7 +121,7 @@ try:    pusha
         cmp di,[si+enp-tbase]
         jne .ne
         mov [bx],cl             ; gecerken alinan piyon (try'da cl = 0)
-.ne:    dec dh                  ; dh==1 (cift adim)? dh sonra lea dx ile eziliyor: serbest
+.ne:    dec ah                  ; ah = yon sayaci: 1 ise cift adim (ah bundan sonra serbest)
         jz .pp                  ; cift adim: BX atlanan kare
         lea dx,[di+0x10]
         test dl,0x60
@@ -174,20 +180,17 @@ main:                           ; tutma cikisi (try) buraya atlar; yigini giris 
 %else
         mov al,[si]
 %endif
-        and al,7
+        and al,0x67             ; UNMOVED ve bit 3-4 gider: tas = renk|tur, cerceve = 0x67
+        aam 0x20                ; AH = renk (cerceve 3), AL = tur (cerceve 7)
         mov bx,chars
-        xlatb
-%ifdef FLIP
-        add al,[di]
-%else
-        add al,[si]
-%endif
-        jnc .c                  ; tas/bos: tasma yok; cerceve 0x0E+0xFF tasar -> AL = CR
+        xlatb                   ; buyuk harf
+        aad 0x20                ; AL += 0x20*renk: siyah kucuk harf; cerceve chars[7]+0x60 >= 0x80
+        jns .c
         add si,byte 7
+        mov al,0x0d
         putc
         mov al,0x0a
-.c:     and al,0x7f             ; UNMOVED bitini at
-        putc
+.c:     putc
         inc si
         jns .l
         mov di,si               ; si = save (cizim 0x8000'de bitti)
@@ -245,8 +248,8 @@ try.u:  mov si,save
         or al,ch
         cmp al,[si]             ; hic oynamamis kendi sahim mi? (AL = SAH|U|renk kalir)
         jne try.r
+        pusha                   ; uretecin yazmaclari (bx yon, ah sayac, dx hedef): .no geri yukler
         mov ah,[bx]             ; AH = bu yonun adimi
-        push bx                 ; bx = uretecin yon isaretcisi: .no geri yukler
         mov bx,si
         add bl,ah
         cmp bx,di               ; ilk adim mi?
@@ -263,9 +266,10 @@ try.w:  add bl,ah               ; sayfa icinde yuru (ureteckteki gibi sarar)
         jc try.no
         sub [bx],al             ; kaleyi kaldir; ZF=1 CF=0: ikinci adimi uret
         mov [di],al             ; kale gecilen kareye (rokta sah zaten oynamis olur)
-try.no: pop bx
+try.no: popa
 try.r:  ret
 
+chars:  db '.PRBKNQ'            ; [7] = sonraki bayt (boot: initial[0] 0x82, DOS: 'r'): +0x60 -> isaretli
 %ifdef boot
 ptab    equ start+1             ; tablo acilis kodunda (yukari bak)
 %elifdef bios
@@ -275,20 +279,20 @@ ptab:   db 'r','b',0,'n'        ; terfi: tur-2 sirasiyla (0: sah yeri, hicbir tu
 %endif
 initial:                        ; (DOS: initial[0] = ptab+4 bekci yeri; kurulumdan sonra okunmaz)
         db ROOK|UNMOVED,KNIGHT,BISHOP,QUEEN,KING|UNMOVED,BISHOP,KNIGHT,ROOK|UNMOVED
-chars:
-        db '.'-0,'P'-1,'R'-2,'B'-3,'K'-4,'N'-5,'Q'-6,(0x0d-FRONT)&255
 %ifndef boot
-        times ((((($-$$)&255)+31)>>8)|(((($-$$)&255)+252)>>8^1))*((260-(($-$$)&255))&255) db 0 ; DOS: offsets-4..pawnb tek sayfada
+        times ((((($-$$)&255)+32)>>8))*((256-(($-$$)&255))&255) db 0 ; DOS: desc..pawnb tek sayfada
 %endif
-offsets:
-        db LO(pawnw),LO(pawnb),LO(rookd),LO(bishd),LO(rookd),LO(disp),LO(rookd)
-disp:   db -33,-31,-18,-14,14,18,31,33
+        ; tas tanimi: 28*yon_sayisi + listenin dirs icindeki yeri; aam 28 ikisini ayirir
+desc:   db 28*4+pawnw-dirs, 28*4+rookd-dirs, 28*4+bishd-dirs, 28*8+rookd-dirs, 28*8+disp-dirs, 28*8+rookd-dirs
+        db 0,0                  ; (6, 7: bu kodlar tahtada yok)
+        db 28*4+pawnb-dirs      ; 8: siyah piyon (PAWN|BPAWN)
+dirs:
+disp:   db 33,31,18,14,-14,-18,-31,-33
 rookd:  db 1,-1,16,-16
 bishd:  db 15,17,-15,-17
-pawnd:
 pawnw:  db -15,-17,-16,-32
 pawnb:  db 15,17,16,32
-        times -((((offsets-4)-start)^((pawnb+3)-start))>>8) db 0 ; offsets-4..pawnb ayni sayfada olmali (xlatb, adim)
+        times -((((desc)-start)^((pawnb+3)-start))>>8) db 0 ; desc..pawnb ayni sayfada olmali
 
 rply:   xor ch,BLACK            ; rakip, yanit katmani
         inc cx                  ; cl her rply cagrisinda 0 -> 1 (ch uzerine tasma yok)
@@ -299,46 +303,44 @@ root:
 play:   mov si,board
         mov bh,TP
 sq:     mov al,[si]
-        and al,0x7f             ; UNMOVED'u at (piyonlarda yok: asagidaki [si] karsilastirmasi temiz)
+        and al,0x7f             ; UNMOVED'u at
         xor al,ch
         dec ax
-        cmp al,6
-        jnc nsq
-        cmp byte [si],PAWN+1
-        sbb al,0xfb
-        mov dh,0x0c
-        and dh,al               ; dh = yon sayisi (4 / 8)
-        mov bl,LO(offsets-4)
-        xlatb
-        mov bl,al               ; bx = yon tablosu isaretcisi (dl bos)
-dir:    mov di,si
-step:   xchg ax,di
-        add al,[bx]
-        xchg ax,di
+        cmp al,BPAWN+1
+        jnc nsq                 ; kendi tasi degil (0-5: P R F S A V, 8: siyah piyon)
+        mov bl,LO(desc)
+        xlatb                   ; 28*sayi + yer
+        aam 28                  ; AH = yon sayisi (4/8), AL = listenin yeri
+        add al,LO(dirs)
+        mov bl,al               ; bx = yon isaretcisi
+dir:    mov dx,si               ; DH = tahta sayfasi, DL = kare
+step:   add dl,[bx]             ; sonraki kare (sayfa icinde sarar)
+        mov di,dx
         mov al,[di]
-        inc ax
-        cmp bl,LO(pawnd)
-        dec al
-        jz empty
-        jc cap
-        cmp dh,3
-        jb nsq
+        test byte [si],6        ; piyon mu? (yalniz P1'de bit 1-2 bos)
+        jz pawn
+        test al,al
+        jz move                 ; tas, bos kareye
 cap:    xor al,ch
-        and al,0x7f             ; UNMOVED'u at
+        and al,0x77             ; UNMOVED ve siyah piyon isaretini at
         xor al,BLACK|(KING^7)   ; rakip t -> t^3, sah -> 7 en ustte; kendi/cerceve > 7
         cmp al,7
         ja next
         jne move
         cmp al,8                ; sah aliniyor: CF=1, ZF=0 (try donusunde je step tutmasin)
         ret
-empty:  jc move
-        cmp dh,2
-        je move
-        ja .ep
+pawn:   test byte [bx],1        ; piyon: yon tekse capraz
+        jnz .d
+        test al,al              ; ileri: hedef bos olmali (dolu ise kalan yonler de ileri)
+        jnz nsq
+        test byte [bx],0x1f     ; +-32: cift adim
+        jnz move
         test si,0x60            ; cift adim: satirin 5. ve 6. bitleri esit mi (yatak 1 ya da 6)?
         jpe move                ; (yanlis renkteki 1/6 yatagi hedefi cerceveye duser)
-.ep:    cmp di,[enp]            ; izinsiz cift adim buraya duser: hedefi enp olamaz
-        jne next                ; (bos hedefte AL=0)
+.d:     test al,al              ; capraz dolu: alma denetimi (izinsiz cift adimda AL=0: enp'ye)
+        jnz cap
+.ep:    cmp di,[enp]            ; capraz bos: yalniz gecerken alma
+        jne next
 move:   test cl,cl
         jnz cont                ; yanit katmani: yalnizca sah alma
         call try
@@ -348,14 +350,13 @@ cont:   cmp byte [di],0
         test byte [si],2        ; kayan tas (kale 2, fil 3, vezir 6) bit1'de
         jnz step
 next:   inc bx
-        dec dh
+        dec ah
         jnz dir
 nsq:    inc si
         jns sq
         ret                     ; son hucre cerceve: CF=0
 
-key2:   call key
-        xchg di,ax
+key2:   call key            ; dosya harfi; ikinci tus (yatak) asagida dusulerek okunur
 key:
 %ifdef bios
         mov ah,0
@@ -372,13 +373,19 @@ display:
 %endif
 %ifdef bios
         mov [ptab+4],ah         ; terfi: tarama kodu bekci yerine (harf buyuklugune bakmaz)
+        and al,0x0f             ; harf -> 1..8 (buyuk/kucuk ayni)
+        xchg al,bl              ; AL = onceki tus (dosya), BL = bu tus
+        aad 0xf0                ; AL = dosya - 16*AH; AH = rakamin tarama kodu = yatak+1 (1:02 .. 8:09)
+        add al,0x8f             ; a1: 1-16*2+0x8f = 0x70
 %else
-        or al,0x20              ; DOS: kucuk harf (koordinatlari etkilemez: alt 4 bit)
-        mov [ptab+4],al
+        or al,0x20              ; DOS: kucuk harf (rakamlari etkilemez)
+        mov ah,al
+        xchg al,[ptab+4]        ; AL = onceki tus; bekci = bu tus (terfi)
+        aad 0xf0                ; AL = harf - 16*rakam
+        add al,0x1f             ; 'a'-16*'1'+0x1f = 0x70 = a1
 %endif
-        and ax,0x0f
-        imul bp,ax,-0x10
-        lea di,[bp+di+board+127]
+        mov ah,board>>8
+        xchg di,ax
         ret
 %ifdef boot
         times 510-($-$$) db 0   ; 510'u asarsa nasm burada hata verir

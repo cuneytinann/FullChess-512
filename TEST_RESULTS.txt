@@ -1,6 +1,7 @@
-# Full test run, 2026-11-25, test.sh
+# Full test run, 2026-11-25 (evening), test.sh
 # Referee: python-chess (reads the screen). Boot sectors start with random register values (BOOTREGS=hostile).
 # Promotion keys: boot sector by scan code (B/N/R keys), DOS by letter (either case); every other key = queen.
+# Two-player versions: rewritten piece selection, stepping, pawn handling, square input and display.
 # Time: boot ≈3 min, DOS ≈7 min (including 3- and 4-ply).
 
 ## boot sector (.bin)

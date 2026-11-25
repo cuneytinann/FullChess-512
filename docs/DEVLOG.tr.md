@@ -63,6 +63,52 @@
 > hizalamak (yerleşim tutmadı; açılış kodu çözümü daha iyi). Testler: `run16.py` int 16h'de AH = ABD düzeni
 > tarama kodu; `promokeys.py` boot için tarama kodu, DOS için harf kuralı; yeni `botpromo.py` (botun tek
 > hamlesi terfi olan konum, 10 tuş). Gerçek BIOS: QEMU + SeaBIOS'ta Shift+N, r, Shift+B, Enter doğrulandı.
+>
+> **Özgünleştirme turu (25.11.2026, akşam).** Atomchess, BootChess, LeanChess, AttoChess ve ChessLin
+> kaynakları derlenip makine kodu karşılaştırıldı (adresler yok sayılarak). İlgisiz programlarla en uzun
+> ortak bayt dizisi 3–4 bayt; Atomchess'le 16 bayttı ve iki kişilik ana sürümde en az 4 komutluk aynı
+> diziler 78 bayt tutuyordu (tuş → kare, taş seçimi, piyon sınıflama, ekran tablosu). Bunlar kendi
+> tekniklerimizle yeniden yazıldı:
+>
+> | Parça | Yeni yazım | Ana sürümde |
+> |---|---|---|
+> | Tuş → kare | `aad 0xF0`: AL = dosya − 16 × yatak; önceki tuş BL'de (boot) / terfi bekçisinde (DOS); `key2` = `call key` + düşerek ikinci tuş. Boot'ta yatak rakam tuşunun tarama kodundan (1 = 02 … 8 = 09) | boot 0, DOS −1 |
+> | Ekran | `and al,0x67; aam 0x20` (AH renk, AL tür) → düz harf tablosu `.PRBKNQ` → `aad 0x20` (renk küçük harf biti olarak geri); çerçeve işaret bitiyle (`jns`), CR/LF açıkça; tablonun 8. baytı arkasındaki bayttan (boot: initial[0] 0x82, DOS: 'r') | +1 |
+> | Piyon sınıflama | Yön baytından: tek = çapraz, ±32 = çift adım; piyonluk `test byte [si],6` | +3 |
+> | Taş seçimi | Taş başına tanım baytı `28 × yön sayısı + liste yeri`; `xlatb` + `aam 28` → AH sayaç, AL yer; siyah piyon tahtada `0x29` (işaret biti 0x08), kendi tanımı (indeks 8; 6–7 boş) | −3 |
+> | Adım | Hedef DX'te (DH tahta sayfası, DL kare): `add dl,[bx]; mov di,dx`; sayaç AH'de (`dec ah`), `try` çift adımı `dec ah` ile tanır; rok kaleyi ararken `pusha`/`popa` (AH korunur) | 0 |
+> | DOS dolgu sayısı | `mov cx,di` (adres = sayaç) yerine `mov ch,2` | 0 |
+>
+> Sonuç (boot / .COM): fullchess **493**/476, 2p 467/450, 2p50 482/465, 2pflip 478/461, 2plight 445/431,
+> 2plightr 445/431 (ilk hâl 492/476 …; arada +4 sürümü 496/479 idi, taş seçimi onu 3 bayt geri aldı).
+> Atomchess'le en az 4 komutluk aynı diziler 78 → **35 bayt**; kalan üçü genel kod (BIOS tuş okuma +
+> yankı, kurulumun başı `mov si / mov di / mov cl,8 / lodsb`, satır sonu basma). En uzun birebir dizi
+> 12 bayt (BIOS çağrısı).
+>
+> Hâlâ Atomchess'ten gelen fikir/iskelet (README Credits'te anılıyor): tahta sayfası 0x7F00 ve döngülerin
+> 0x8000'de işaret bitiyle bitmesi, çerçeve karesinin yeni satır başlatması (`add si,7`), kurulum
+> döngüsünün biçimi (renkler ters), piyon yönlerinin sırası (yakalama, yakalama, ileri, çift). Bot
+> sürümü (`fullchess-cpu.asm`) henüz eski çekirdekte: taş seçimi, adım, piyon, tuş → kare, harf tablosu
+> Atomchess türevi; sıradaki iş. Önceki teknik: ChessLin (Poudade, 2016) koordinatı `sub ax,3161h; aad 16`
+> ile çeviriyor; bizim `aad 0xF0` ondan bağımsız bulundu ve README'de anılıyor.
+>
+> Davranış farkı: boot'ta yatak tuşu ana klavyedeki 1–8 (sayısal tuş takımı çalışmaz; AZERTY'de üst sıra
+> Shift'siz çalışır); DOS'ta dosya tuşu harf olmalı (eskiden `5254` = `e2e4` idi). Bot değişmedi.
+>
+> Taş seçiminde denenip bırakılanlar: siyah piyona ayrı tür kodu 7 (kayan taş bit testiyle çakışıyor:
+> 1–7'de her bit 4 kodda); iki tanım tablosu 32 bayt arayla ve `or al,ch` (+7); sonlandırıcılı ya da
+> 8'e hizalı biten listeler (+6–9 ya da dolgu); renk bitini 0x80'e taşıyıp yönün işaretiyle denetim
+> (8 yönlü dört taşa üç boş kod); tanım tablosunun 2 boş baytını yön tablosuyla örtüştürmek (kazanç 0).
+>
+> "Alınırsa kısaltır" ölçümleri (README'deki tablo): Atomchess'in piyon sınıflaması (liste yeri +
+> `inc`/`cmp`/`dec`, sayaç AH'de olduğu için `inc al`) **−2 B** (491, testler geçti); Atomchess'in
+> harf−kod tablosu eski alfabede −1, siyah piyon işaretiyle ek kod ister; taş seçimi ve `imul`/`lea`
+> kısaltmıyor (+3, 0/+1). LeanChess/AttoChess'in tablosuz harf (`add`, fil `O`) ve yarım yön tablosu
+> (`neg`) ölçülmedi. ChessLin'in 32 bit sıra sabiti 386 ister. BootChess ve Reloaded'da kısaltan bir şey
+> bulunmadı; Super Micro Chess'in assembly kaynağı yayımlanmamış.
+>
+> Testler: `test.sh` tam tur 59 satır, **0 hata** (iki kişilik rastgele oyunların hamle sayıları öncekiyle
+> birebir aynı: davranış değişmedi); QEMU + SeaBIOS'ta rok ve geçerken alma oynandı, siyah piyon `p`.
 
 > Deneysel bir eğlence projesi. Hedef: FideLite L1 kurallarının **hiçbirini atmadan** (yasallık,
 > rok, geçerken alma, seçmeli terfi, mat/pat) insan-insan ve insan-bilgisayar satrancını tek bir
@@ -158,14 +204,14 @@ Boyutlar **kod baytı**dır (boot: dolgu ve 0x55AA imzası hariç; sektörde kul
 
 | Dosya adı | Bayraklar | boot | .COM | 19.11 (boot/.COM) | Özellik |
 |---|---|---|---|---|---|
-| **`ii_sonuc_50_donme`** (ana sürüm) | `-DFIFTY -DFLIP` | **492** | 476 | 510/488 | Tüm L1 + `#`/`=` + 50 hamle + tahta dönme |
-| `ii_sonuc` | — | **466** | 450 | 479/457 | Tüm L1 kuralları + `#`/`=` |
-| `ii_sonuc_50` | `-DFIFTY` | 481 | 465 | 499/477 | + 50 hamle (100 yarım hamle) otomatik beraberlik |
-| `ii_sonuc_donme` | `-DFLIP` | 477 | 461 | 490/468 | + sıra siyahtaysa tahta 180° döner |
-| `ii_light` | `-DLIGHT` | **444** | 436 | 457/437 | Tüm L1 kuralları, oyun sonu göstergesi yok (oyun donar) |
-| `ii_light_redraw` | `-DLIGHT -DREDRAW` | 444 | 436 | 455/435 | Aynı; her girişten sonra tahta yeniden çizilir (arayüz farkı) |
+| **`ii_sonuc_50_donme`** (ana sürüm) | `-DFIFTY -DFLIP` | **493** | 476 | 510/488 | Tüm L1 + `#`/`=` + 50 hamle + tahta dönme |
+| `ii_sonuc` | — | **467** | 450 | 479/457 | Tüm L1 kuralları + `#`/`=` |
+| `ii_sonuc_50` | `-DFIFTY` | 482 | 465 | 499/477 | + 50 hamle (100 yarım hamle) otomatik beraberlik |
+| `ii_sonuc_donme` | `-DFLIP` | 478 | 461 | 490/468 | + sıra siyahtaysa tahta 180° döner |
+| `ii_light` | `-DLIGHT` | **445** | 431 | 457/437 | Tüm L1 kuralları, oyun sonu göstergesi yok (oyun donar) |
+| `ii_light_redraw` | `-DLIGHT -DREDRAW` | 445 | 431 | 455/435 | Aynı; her girişten sonra tahta yeniden çizilir (arayüz farkı) |
 
-Boyutlar 25.11 itibarıyla (harfli terfi dahil); son sütun 19.11'deki (1–4 tuşlu) hâli.
+Boyutlar 25.11 akşamı itibarıyla (harfli terfi + özgünleştirme turu); son sütun 19.11'deki (1–4 tuşlu) hâli.
 
 `-DPLIES=150`: 50 yerine FideLite L2'deki gibi otomatik **75 hamle** (aynı bayt; hazır derlenmiş sürümü yok).
 Sektörde boş kalan (25.11): ana sürüm 18 B, `ii_sonuc` 44 B, `ii_light` 66 B.
@@ -348,6 +394,7 @@ Atomchess (Óscar Toledo) tarzı üreteç temel alındı, kural tarafı baştan 
 | ply3: `node` yedekle-ve-tara ortak girişi, parite ile seviye ayrımı, `jc/cbw` silme | dahil | |
 | ply3 `SPIN` | −5 | 509 (OR) sığdı |
 | 25.11 harfli terfi turu (13 teknik, en üstteki nota bakın) | 524 → 492 | ana iki kişilik; bot 480 |
+| 25.11 özgünleştirme turu (Atomchess türevi parçalar yeniden yazıldı; en üstteki nota bakın) | 492 → 493 | iki kişilik; bot henüz değil |
 
 ## 7. Ölçülen maliyetler (özellik ekleri)
 
@@ -496,7 +543,7 @@ Bilinen küçük satranç programları (kaynaklar 19.11.2026'da yeniden kontrol 
 | Super Micro FIDE ZX81 1K (aynı yazar) | belirtilmemiş | ZX81 (Z80) | küçük terfi seçilebilir; kullanıcıdan yasal oynaması isteniyor, otomatik denetim "hataların %99'unu" önlüyor |
 | ChesSkelet (Alex / Alejandro García, 2019→) | 377 → 363 → 352 B, sonra 269 B; **Guinness kaydı 354 B (23.09.2022)** | ZX Spectrum (Z80) | kuralların hepsi yok; tam sürümde "temel rok" |
 | LeanChess (Dmitry Shechtman, 2019–20) | 288 B (ilk sürüm 328) | x86 DOS / BIOS | rok, geçerken alma, terfi yok; giriş denetlenmiyor; mat/pat tespiti yok |
-| AttoChess (Temmuz 2026) | 278 B | x86 DOS | rok, geçerken alma, terfi, mat tespiti yok; giriş denetlenmiyor |
+| AttoChess (2026) | 272 B (önceki 276/278) | x86 DOS | rok, geçerken alma, terfi, mat tespiti yok; giriş denetlenmiyor |
 
 Kaynaklar: https://en.wikipedia.org/wiki/1K_ZX_Chess · https://www.chessprogramming.org/BootChess ·
 https://nanochess.org/chess6.html · https://github.com/nanochess/toledo-atomchess ·
